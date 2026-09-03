@@ -5,7 +5,6 @@ CONFIG += c++17
 INCLUDEPATH += include
 
 DISTFILES += \
-    .gitignore \
     README.md \
     Markdown.md
 
