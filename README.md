@@ -1,23 +1,23 @@
 # RRT multiagente con Qt 6
 
-Aplicación en C++17 y Qt 6 para visualizar la expansión incremental de un árbol RRT para múltiples robots. La interfaz utiliza `QOpenGLWidget` y `QTimer`, mientras que el planificador RRT y el integrador Euler se encuentran desacoplados de Qt.
+Aplicación en C++17 y Qt 6 para visualizar un árbol RRT para múltiples robots
 
-## Estado de la arquitectura
+* la interfaz utiliza `QOpenGLWidget` y `QTimer`
+* el planificador RRT y el integrador Euler se encuentran desacoplados de Qt
 
-El proyecto aplica una estrategia de migración incremental basada en "extraer y delegar". Las fases 0 a 8 están implementadas y cada una fue validada mediante una compilación de control con qmake.
 
-### Componentes principales
+### RESUMEN principal
 
-1. **`main.cpp`**: crea `QApplication` y la ventana principal `RRTWindow`.
-2. **`RRTWindow` (`window.h` / `window.cpp`)**: construye la ventana, instala `RRTWidget` como widget central y solicita la configuración del escenario de demostración.
-3. **`DemoScenario` (`DemoScenario.h` / `DemoScenario.cpp`)**: contiene las posiciones iniciales y finales, velocidades, opciones de dibujo y parámetros del escenario de tres robots.
-4. **`RRTWidget` (`widget.h` / `widget.cpp`)**: mantiene la capa Qt, el temporizador y el renderizado OpenGL. Delega el árbol en `IPlanner` y el movimiento Euler en `VelocityIntegrator`.
-5. **`IPlanner` (`IPlanner.h`)**: define el contrato independiente de Qt para configurar, ejecutar y consultar un planificador.
-6. **`RRTPlanner` (`RRTPlanner.h` / `RRTPlanner.cpp`)**: implementa el algoritmo RRT no-Euler y conserva todo su estado mediante tipos y bibliotecas estándar de C++.
-7. **`VelocityIntegrator` (`VelocityIntegrator.h` / `VelocityIntegrator.cpp`)**: integra el movimiento Euler sin depender de Qt y mantiene las velocidades y configuraciones de la simulación.
-8. **`Config.h`**: define los tipos de datos compartidos sin dependencias de Qt.
+* **`main.cpp`**: crea `QApplication` y la ventana principal `RRTWindow`.
+* **`RRTWindow` (`window.h` / `window.cpp`)**: construye la ventana, instala `RRTWidget` como widget central y solicita la configuración del escenario de demostración
+* **`DemoScenario` (`DemoScenario.h` / `DemoScenario.cpp`)**: contiene las posiciones iniciales y finales, velocidades, opciones de dibujo y parámetros del escenario de tres robots
+* **`RRTWidget` (`widget.h` / `widget.cpp`)**: mantiene la capa Qt, el temporizador y el renderizado OpenGL. Delega el árbol en `IPlanner` y el movimiento Euler en `VelocityIntegrator`
+* **`IPlanner` (`IPlanner.h`)**: independiente de Qt: estructura general para marcar configurar, ejecutar y consultar un planificador
+* **`RRTPlanner` (`RRTPlanner.h` / `RRTPlanner.cpp`)**: implementa el algoritmo RRT para multirobots heredando de IPlanner, solo usa bibliotecas estándar de C++
+* **`VelocityIntegrator` (`VelocityIntegrator.h` / `VelocityIntegrator.cpp`)**: integra el movimiento sin depender de Qt y mantiene las velocidades y configuraciones de la simulación
+* **`Config.h`**: configuracion
 
-## Estructura relevante
+## Estructura
 
 ```text
 include/
@@ -35,14 +35,13 @@ src/
   main.cpp
   widget.cpp
   window.cpp
+
 qt_rrt.pro
 ```
 
 ## Datos
 
 `include/Config.h` contiene:
-
-
 
 - `Config`: posicióßn cartesiana y orientación de un robot.
 - `Velocities`: velocidades lineales y angular.
@@ -53,7 +52,7 @@ Estos tipos usan únicamente la biblioteca estándar de C++ y pueden incluirse e
 
 ## Planificador mas general
 
-`IPlanner` permite:
+`IPlanner` hace:
 
 - Configurar origen, meta y número de robots.
 - Configurar tam de paso, límite de nodos y tolerancia de llegada.
@@ -66,7 +65,7 @@ asi estan independientes interfaz y algoritmo permitiendo incorporar otros algor
 
 ## ARCHIVOS actuales
 
-### Núcleo estándar de C++
+### Algoritmos C++
 
 `RRTPlanner` contiene:
 
@@ -84,9 +83,12 @@ el cálculo de velocidades entre configuraciones y el avance Euler. Tanto `RRTPl
 `VelocityIntegrator` usan solo C++ estándar y no incluyen ni utilizan clases de Qt para que sea totalmente independiente
 
 
-### Capa Qt y renderizado
+### Capa Qt y renderizado (separado)
 
-`RRTWidget` conserva sus métodos públicos originales para mantener compatibilidad. En modo no-Euler:
+`RRTWidget` tiene sus métodos públicos originales para mantener compatibilidad. 
+
+
+En modo no-Euler:
 
 - Los métodos `OriginTree`, `GoalTree`, `ParamsTreeRRT` y `DistanceToTheGoal` validan o adaptan los datos y los delegan al planner.
 - `growTree()` llama a `IPlanner::step()`, detiene el temporizador al alcanzar la meta y solicita el repintado.
@@ -98,17 +100,11 @@ En modo Euler (EN PROCESO AUN...) se supone que el widget solicita al planner el
 lo entrega a `VelocityIntegrator` y después coordina sus avances desde el temporizador
 `paintGL()` solo consulta referencias constantes y no modifica el estado del algoritmo ni de la simulación
 
-## Escenario de demostración
+## Escenario de pruba
 
-El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a `configureDemoScenario()` en `DemoScenario.cpp`. Mantiene:
+El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a `configureDemoScenario()` en `DemoScenario.cpp`
 
-- Tres robots.
-- Las mismas configuraciones de origen y meta.
-- Las mismas velocidades.
-- El modo no-Euler activo.
-- El mismo tamaño de paso, tolerancia, límite de nodos, opciones de dibujo e intervalo del temporizador.
-
-`RRTWindow` ya no conoce directamente los parámetros numéricos del algoritmo es puramente de dibujp
+`RRTWindow` ya no conoce directamente los parámetros numéricos del algoritmo es puramente de dibujos
 
 
 
@@ -140,7 +136,7 @@ El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a
 - `computeVelocities()`, `VelocitiesRobots()` y `EulerMult()` actúan ahora como fachadas delgadas hacia `VelocityIntegrator`
 x
 
-## Compilación
+## Compilacion
 
 El proyecto utiliza qmake y C++17:
-    abrirse `qt_rrt.pro` directamente desde Qt Creator y compilarse con un kit de Qt 6.
+    lo recomendable es abrirse `qt_rrt.pro` directamente desde Qt Creator y compilarse con un kit de Qt 6.
