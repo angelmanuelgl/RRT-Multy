@@ -1,30 +1,48 @@
 #include "DemoScenario.h"
-
 #include "widget.h"
 
-void configureDemoScenario(RRTWidget* widget)
+
+void configureDemoScenario(RRTWidget* widget, const std::string& ruta)
 {
     if (!widget) {
         return;
     }
 
-    const int N = 3;
-    float xi[N]  = { 200.0f, 210.0f, 240.0f };
-    float yi[N]  = { 100.0f, 160.0f, 90.0f };
-    float thi[N] = { 0.0f, 0.0f, 0.0f  };
+    LOG_INFO("Iniciando carga del archivo: ", ruta);
 
-    /*float xf[N]  = { 1000.0f, 1050.0f, 1020.0f };
-    float yf[N]  = { 600.0f, 630.0f, 610.0f };
-    float thf[N] = { 0.0f, 0.0f, 0.0f };*/
+    std::ifstream file(ruta);
 
-    float xf[N]  = { 200.0f, 410.0f, 440.0f };
-    float yf[N]  = { 300.0f, 360.0f, 190.0f };
-    float thf[N] = { 0.0f, 0.0f, 0.0f };
+    if (!file.is_open()) {
+        LOG_ERROR("No se pudo abrir el archivo de escenarios: ", ruta);
+        return;
+    }
 
-    //vectores de velocidad
-    float Vxr[N] ={0.1f ,0.1f, 0.1f};
-    float Vyr[N] ={0.1f ,0.1f, 0.1f};
-    float Vangr[N] ={0.0f ,0.0f, 0.0f};
+    int N = 0;
+    if (!(file >> N) || N <= 0) {
+        LOG_ERROR("Numero de robots invalido ");
+        return;
+    }
+
+    // Usamos vectores dinamicos para N leido del archivo
+    std::vector<float> xi(N), yi(N), thi(N);
+    std::vector<float> xf(N), yf(N), thf(N);
+    std::vector<float> Vxr(N), Vyr(N), Vangr(N);
+
+    // Leer los datos por cada robot
+    for (int i = 0; i < N; ++i) {
+        if (!(file >> xi[i] >> yi[i] >> thi[i]
+              >> xf[i] >> yf[i] >> thf[i]
+              >> Vxr[i] >> Vyr[i] >> Vangr[i])) {
+            LOG_ERROR("Error leyendo los datos del robot ", i , " en el archivo .in");
+            return;
+        }
+
+        std::cout << xi[i] << yi[i] << thi[i]
+             << xf[i] << yf[i] << thf[i]
+             << Vxr[i] << Vyr[i] << Vangr[i];
+    }
+
+    file.close();
 
     widget->ActiveEuler=false;
     // widget->ActiveEuler=true;
@@ -35,6 +53,7 @@ void configureDemoScenario(RRTWidget* widget)
     widget->DistanceToTheGoal(N*40);
     widget->ParamsTreeRRT(40,1000000);
     widget->DrawMyNodes(true,true);
+
     //widget->EulerMult(0.1);
     if(widget->ActiveEuler)
         widget->SetTimeGrow(2000);

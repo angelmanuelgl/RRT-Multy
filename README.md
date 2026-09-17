@@ -112,7 +112,6 @@ El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a
 
 - Se movieron `Config`, `Velocities` y el nodo del árbol fuera de `widget.h`
 - El nodo fue nombrado `PlanNode` para evitar colisiones con otros posibles algoritmos futuros
-- Se añadió `PlanSnapshot`  estructura de lectura agrupada
 - `widget.h` ahora incluye `Config.h`s
 
 - se cambiaron `randFloat`, `configDistance`, `steer` y `getNearest` como metodos privados de `RRTPlanner`

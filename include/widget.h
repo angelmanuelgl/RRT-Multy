@@ -1,7 +1,7 @@
 #pragma once
 #include <QOpenGLWidget>
 #include <QTimer>
-#include "IPlanner.h"
+#include "IPlanner.h" //clase general // aqui esta el RTT
 #include "VelocityIntegrator.h"
 #include <memory>
 
@@ -19,10 +19,10 @@ public:
     bool ActiveEuler=true;//new
 
 public slots:
-    void OriginTree(float *x, float *y, float *th,int Nrobots, float radio);
-    void GoalTree(float *x, float *y, float *th,int Nrobots, float radio);
+    void OriginTree(std::vector<float>& x, std::vector<float>& y, std::vector<float>& th,int Nrobots, float radio);
+    void GoalTree(std::vector<float>& x, std::vector<float>& y, std::vector<float>& th,int Nrobots, float radio);
     void computeVelocities(float Tau, int Nrobots);
-    void VelocitiesRobots(float *Vx, float *Vy, float *Wang, int Nrobots);//new
+    void VelocitiesRobots(std::vector<float>& Vx, std::vector<float>& Vy, std::vector<float>& Wang, int Nrobots);//new
     void DrawMyNodes(bool All, bool FinalPath);
     void DistanceToTheGoal(float distance);
     void ParamsTreeRRT(float Step, int MaximalNodes);
@@ -39,7 +39,8 @@ private slots:
 
 private:
     //AMGL// el estado del RTT es guardado aparte para separar  algoritmo de visualizacion
-    std::shared_ptr<IPlanner> planner_; //para mas general
+    std::shared_ptr<IPlanner> planner_; //RTT_planner // en general IPlaner
+
     // la idea es que este modulo podremos elegir que tipo es
     // avanzar en lineas rectas // metodo de euler // o
     VelocityIntegrator velocityIntegrator_;

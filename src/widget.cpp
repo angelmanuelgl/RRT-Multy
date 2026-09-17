@@ -22,7 +22,6 @@ RRTWidget::RRTWidget(QWidget *parent)
 
 
     const int numRobots = static_cast<int>(originQ.size());//revisamos el numero de robots de la configuracion inicial
-    (void)numRobots;
 
     velocityIntegrator_.setState(originQ);
 
@@ -49,14 +48,9 @@ void RRTWidget::initializeGL() {
     glClearColor(1, 1, 1, 1);
 }
 
-void RRTWidget::OriginTree(float *x, float *y, float *th,int Nrobots, float radio)
+void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y, std::vector<float>& th,int Nrobots, float radio)
 {
 
-    if (!x || !y || !th)
-    {
-        qWarning("OriginTree: punteros nulos");
-        return;
-    }
     if (Nrobots <= 0)
     {
         qWarning("OriginTree: NRobots <= 0");
@@ -86,13 +80,9 @@ void RRTWidget::OriginTree(float *x, float *y, float *th,int Nrobots, float radi
     update();
 }
 
-void RRTWidget::GoalTree(float *x, float *y, float *th,int Nrobots, float radio)
+void RRTWidget::GoalTree(std::vector<float>& x, std::vector<float>& y, std::vector<float>& th,int Nrobots, float radio)
 {
 
-    if (!x || !y || !th) {
-        qWarning("GoalTree: punteros nulos");
-        return;
-    }
     if (Nrobots <= 0) {
         qWarning("GoalTree: NRobots <= 0");
         return;
@@ -117,14 +107,8 @@ void RRTWidget::computeVelocities(float Tau, int Nrobots)
 }
 
 
-void RRTWidget::VelocitiesRobots(float *Vx, float *Vy, float *Wang, int Nrobots)
+void RRTWidget::VelocitiesRobots(std::vector<float>& Vx, std::vector<float>& Vy, std::vector<float>& Wang, int Nrobots)
 {
-    if (!Vx || !Vy || !Wang)
-    {
-        qWarning("Velocidades: punteros nulos");
-        return;
-    }
-
     std::vector<Velocities> velocities(Nrobots);
     for(int i=0;i<Nrobots; i++)
     {
@@ -463,8 +447,8 @@ void RRTWidget::paintGL()
     QTextStream out(stdout);
     const int displayedPathNodes = planner_->getPathNodeCount();
     const int displayedRRTNodes = planner_->getNodeCount();
-    out << "Numero de nodos en el path: " << displayedPathNodes << Qt::endl;
-    out << "Numero de nodos en el path: " << (displayedRRTNodes+2) << Qt::endl;
+    // out << "Numero de nodos en el path: " << displayedPathNodes << Qt::endl;
+    // out << "Numero de nodos en el path: " << (displayedRRTNodes+2) << Qt::endl;
 }
 
 

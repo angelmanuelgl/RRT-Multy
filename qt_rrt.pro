@@ -6,8 +6,8 @@ INCLUDEPATH += include
 
 DISTFILES += \
     README.md \
-    Markdown.md
-
+    Markdown.md \
+    data/escenario1.in \
 
 SOURCES += \
     src/DemoScenario.cpp \
