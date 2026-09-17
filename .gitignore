@@ -3,6 +3,7 @@ build/
 bin/
 debug/
 release/
+%{CurrentProject:Path} /
 
 # Qt Creator specific files
 *.pro.user
