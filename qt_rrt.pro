@@ -14,6 +14,8 @@ DISTFILES += \
 
 SOURCES += \
     src/DemoScenario.cpp \
+    src/PQPCollision.cpp \
+    src/PolygonGeometry.cpp \
     src/main.cpp \
     src/widget.cpp \
     src/window.cpp \
@@ -25,8 +27,11 @@ SOURCES += \
 HEADERS += \
     include/DemoScenario.h \
     include/IPlanner.h \
+    include/Obstacle.h \
+    include/PQPCollision.h \
+    include/PolygonGeometry.h \
     include/widget.h \
     include/window.h \
     include/Config.h \
     include/RRTPlanner.h \
-    include/VelocityIntegrator.h \
+    include/VelocityIntegrator.h

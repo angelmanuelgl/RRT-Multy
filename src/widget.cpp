@@ -38,6 +38,8 @@ void RRTWidget::setPlanner(std::shared_ptr<IPlanner> planner)
         return;
     }
 
+    planner->setObstacles(obstacles_); // AMGL // configurar los obstaculos
+
     planner_ = std::move(planner);
     velocityIntegrator_.setState(planner_->getOrigin());
     update();
@@ -205,9 +207,10 @@ void RRTWidget::paintGL()
         const auto &goalQ = planner_->getGoal();
         const auto &originQ = planner_->getOrigin();
 
+        // PINTAR
         glClear(GL_COLOR_BUFFER_BIT);
         glLoadIdentity();
-
+        drawObstacles(); // AMGL //
 
         // ---++++++++++++++++++++++++++++---
 
@@ -221,7 +224,7 @@ void RRTWidget::paintGL()
                 glColor3f(cr, cg, cb);
                 glLineWidth(1.0f);
                 glBegin(GL_LINES);
-                for (const auto& node : tree) {
+                for (const auto& node :tree) {
                     if (node.parent != -1) {
                         const auto &q_child  = node.q;
                         const auto &q_parent = tree[node.parent].q;
@@ -232,12 +235,13 @@ void RRTWidget::paintGL()
 
                             if(drawAllNodes_)
                             {
-                                const float rn = 3;
-                                glBegin(GL_LINE_LOOP);
-                                for (int i = 0; i < 36; ++i) {
-                                    float ang = i * 2.0f * M_PI / 36.0f;
-                                    glVertex2f(q_child[r].x + rn * std::cos(ang), q_child[r].y + rn * std::sin(ang));
-                                }
+                                // AMGL // ToDO: descomentar
+                                // const float rn = 3;
+                                // glBegin(GL_LINE_LOOP);
+                                // for (int i = 0; i < 36; ++i) {
+                                //     float ang = i * 2.0f * M_PI / 36.0f;
+                                //     glVertex2f(q_child[r].x + rn * std::cos(ang), q_child[r].y + rn * std::sin(ang));
+                                // }
                             }
                         }
                     }
@@ -265,12 +269,13 @@ void RRTWidget::paintGL()
 
                     if(drawFinalPath_)
                     {
-                        const float rnn = 3;
-                        glBegin(GL_LINE_LOOP);
-                        for (int i = 0; i < 36; ++i) {
-                            float ang = i * 2.0f * M_PI / 36.0f;
-                            glVertex2f(q[r].x + rnn * std::cos(ang), q[r].y + rnn * std::sin(ang));
-                        }
+                        // AMGL // ToDO: descomentar
+                        // const float rnn = 3;
+                        // glBegin(GL_LINE_LOOP);
+                        // for (int i = 0; i < 36; ++i) {
+                        //     float ang = i * 2.0f * M_PI / 36.0f;
+                        //     glVertex2f(q[r].x + rnn * std::cos(ang), q[r].y + rnn * std::sin(ang));
+                        // }
                     }
 
                 }
@@ -327,6 +332,7 @@ void RRTWidget::paintGL()
             glEnd();
         }
     }
+    // modo en construccion
     else
     {
         const auto &tree = planner_->getTree();
@@ -335,8 +341,11 @@ void RRTWidget::paintGL()
         const auto &Next = velocityIntegrator_.getNext();
         const auto &Prev = velocityIntegrator_.getPrevious();
 
+        // PINTAR
         glClear(GL_COLOR_BUFFER_BIT);
         glLoadIdentity();
+        drawObstacles(); // AMGL //
+
 
         // ---++++++++++++++++++++++++++++---
 
@@ -463,12 +472,20 @@ void RRTWidget::EulerMult(float DeltaT)
 //Esta función se llama cada 30 ms en RRTWidget por default, pero toma el valor segun la función SetTimeGrow
 void RRTWidget::growTree()
 {
-    if(!ActiveEuler)
-    {
-        if (planner_->step())
-            timer_.stop();
+    if( !ActiveEuler ){
+        try {
+            planner_->step();
 
-        update();//refrescamos pantalla
+            if (planner_->isDone())
+                timer_.stop();
+        }
+
+        catch (const std::exception& ex) {
+            timer_.stop();
+            LOG_ERROR("planificacion interrumpida: ", ex.what());
+        }
+
+        update();
         return;
     }
 
@@ -505,4 +522,55 @@ void RRTWidget::growTree()
 
     EulerMult(0.1);
     update();//refrescamos pantalla
+}
+
+
+/*
+    OBSTACULOS
+*/
+
+void RRTWidget::StopPlanning()
+{
+    timer_.stop();
+}
+
+void RRTWidget::SetObstacles(
+    const std::vector<PolygonObstacle>& obstacles)
+{
+    timer_.stop();
+
+    // Primero configurar PQP. Si falla, no cambiar la imagen.
+    planner_->setObstacles(obstacles);
+    obstacles_ = obstacles;
+
+    velocityIntegrator_.setState(planner_->getOrigin());
+    update();
+
+    // El escenario reanudará el timer al terminar de configurarse.
+}
+
+void RRTWidget::drawObstacles()
+{
+    glColor3f(0.72f, 0.72f, 0.72f);
+
+    glBegin(GL_TRIANGLES);
+    for (const auto& obstacle : obstacles_) {
+        for (const auto& triangle : obstacle.triangles) {
+            for (const auto& p : triangle)
+                glVertex2d(p.x, p.y);
+        }
+    }
+    glEnd();
+
+    glColor3f(0.20f, 0.20f, 0.20f);
+    glLineWidth(2.0f);
+
+    for (const auto& obstacle : obstacles_) {
+        glBegin(GL_LINE_LOOP);
+        for (const auto& p : obstacle.vertices)
+            glVertex2d(p.x, p.y);
+        glEnd();
+    }
+
+    glLineWidth(1.0f);
 }

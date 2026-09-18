@@ -13,7 +13,7 @@ RRTPlanner::RRTPlanner()
 
     //**opcional porque asi se inicializa con un robot********
     //verificar que la configuración de origen tenga al menos un robot
-    if (originQ_.empty()) {
+    if( originQ_.empty() ){
         originQ_.push_back({200.f, 140.f, 0.f});
     }
     //**opcional porque asi se inicializa con un robot********
@@ -23,6 +23,8 @@ RRTPlanner::RRTPlanner()
 
 void RRTPlanner::setStart(const std::vector<Config>& q, float radius)
 {
+    // collisionChecker_.setRobotRadius(radius); // AMGL //
+    collisionCheckResolution_ = radius / 2.0;
     originQ_ = q;
     originRadius_ = radius;
     numRobots_ = static_cast<int>(originQ_.size());
@@ -34,11 +36,12 @@ void RRTPlanner::setGoal(const std::vector<Config>& q, float radius)
     goalQ_ = q;
     goalRadius_ = radius;
     numRobots_ = static_cast<int>(goalQ_.size());
+    reset(); // AMGL //
 }
 
 void RRTPlanner::setNumRobots(int n)
 {
-    if (n > 0) {
+    if( n > 0 ){
         numRobots_ = n;
     }
 }
@@ -66,7 +69,7 @@ void RRTPlanner::reset()
     nNodesRRT_ = 0;
     done_ = false;
 
-    if (!originQ_.empty()) {
+    if( !originQ_.empty() ){
         tree_.emplace_back(originQ_, -1);//insertamos el nodo inicial al origen del arbol
         //tree_.emplace_back(originQ_, -1);//Agregamos el nodo de configuracion inicial de los robots al arbol
     }
@@ -147,25 +150,78 @@ void RRTPlanner::reset()
         T.ADD_EDGE(q_near, q_new, trayectoria)
 
 */
+
+/*
+    step(): devuelve true si existe sol
+    isDone(): devuelve true si termino, con solucion o por fallo
+*/
 bool RRTPlanner::step()
 {
-    if (done_) {
+    if( done_ ){
+        return !finalPath_.empty(); // AMGL//
         return true;
     }
 
-    if (numRobots_ <= 0 || tree_.empty() || goalQ_.empty()
-        || static_cast<int>(tree_.size()) >= maxNodes_) {
+
+    // --- --- PARA DEBUG MAS CLARO --- ---
+    // AMGL // auxiliar en caso de error
+    auto fallo = [this](const char* message ){
+        LOG_ERROR(message);
+        finalPath_.clear();
+        nNodesPath_ = 0;
+        done_ = true;
         return false;
+    };
+
+    if( !problemChecked_ ){
+
+        // comprovaciones anteriores
+        if( numRobots_ <= 0 || tree_.empty()
+            || originQ_.size() != static_cast<std::size_t>(numRobots_)
+            || goalQ_.size() != static_cast<std::size_t>(numRobots_) ){
+
+            return fallo("Cantidades de Robots en inicio y final no coiciden");
+        }
+
+        // comprovacion para mas seguridad
+        if( !std::isfinite(stepSize_)
+            || stepSize_ <= 0.0f || stepSize_ > 500.0f
+            || !std::isfinite(distToGoal_) || distToGoal_ < 0.0f
+            || maxNodes_ < 2 ){
+            return fallo("Parametros del RRT invalidos");
+        }
+
+        if( !isConfigurationValid(originQ_))
+            return fallo("NO hay configuracion inicial en colision");
+
+        if( !isConfigurationValid(goalQ_))
+            return fallo("NO hay configuracion final en colision");
+
+        problemChecked_ = true;
     }
 
-    if (static_cast<int>(goalQ_.size()) < numRobots_
-        || static_cast<int>(tree_.front().q.size()) < numRobots_) {
-        return false;
-    }
+    if( tree_.size() >= static_cast<std::size_t>(maxNodes_))
+        return fallo("Limite de nodos alcanzado sin solucion");
+
+    if( attempts_ >= maxAttempts_)
+        return fallo("Limite de intentos alcanzado sin solucion");
+
+
+    // AMGL// esto es lo que estaba anteriormente //ya no deberia ser util
+    // if( numRobots_ <= 0 || tree_.empty() || goalQ_.empty()
+    //     || static_cast<int>(tree_.size()) >= maxNodes_ ){
+    //     return false;
+    // }
+
+    // if( static_cast<int>(goalQ_.size()) < numRobots_
+    //     || static_cast<int>(tree_.front().q.size()) < numRobots_ ){
+    //     return false;
+    // }
+
 
     //generamos un conf aleatoria de cada robot
     std::vector<Config> qRand(numRobots_);
-    for (int i = 0; i < numRobots_; ++i) {
+    for (int i = 0; i < numRobots_; ++i ){
         qRand[i].x = randFloat(stepSize_, 500.0f); //width());
         qRand[i].y = randFloat(stepSize_, 500.0f);// height());
         //descomentar para contemlplar orientación
@@ -180,35 +236,70 @@ bool RRTPlanner::step()
     //Steer: mover de q_near hacia q_rand con paso stepSize
     const auto qNew = steer(qNear, qRand, stepSize_);
 
+
+    // realizamos las comprobacio antes de insertar qNew
+    // if (!isEdgeValid(qNear, qNew))
+    //     return false;
+
     //Insertar nuevo nodo
+    const int newIndex = static_cast<int>(tree_.size());
     tree_.emplace_back(qNew, nearest);
     ++nNodesRRT_;
 
-    if (!qNew.empty()) {
-        const float distanceToGoal = configDistance(qNew, goalQ_);//Calculamos la distancia des qrand a la meta
-        if (distanceToGoal <= distToGoal_) {
-            // Conectamos exactamente al goal del robot 0
-            tree_.emplace_back(goalQ_, static_cast<int>(tree_.size()) - 1);//conectamos la meta con el ultimo nodo agregado
+    if( configDistance(qNew, goalQ_) > distToGoal_)
+        return false;
 
-            // Backtracking del camino
-            finalPath_.clear();
-            nNodesPath_ = 0;
-            int index = static_cast<int>(tree_.size()) - 1;
-            while (index != -1) {
-                finalPath_.push_back(index);
-                index = tree_[index].parent;
-                ++nNodesPath_;
-            }
-            std::reverse(finalPath_.begin(), finalPath_.end());
+    if( tree_.size() >= static_cast<std::size_t>(maxNodes_))
+        return false;
 
-            //TimerStop=1;
-            done_ = true;
-            return true;
-        }
+
+    // comprobar la conexion final
+    // if( !isEdgeValid(qNew, goalQ_) )
+    //     return false;
+
+    // Conectamos exactamente al goal del robot 0
+    tree_.emplace_back(goalQ_, newIndex); //conectamos la meta con el ultimo nodo agregado
+
+    // Backtracking del camino
+    finalPath_.clear();
+    nNodesPath_ = 0;
+    int index = static_cast<int>(tree_.size()) - 1;
+    while (index != -1 ){
+        finalPath_.push_back(index);
+        index = tree_[index].parent;
+        ++nNodesPath_;
     }
+    std::reverse(finalPath_.begin(), finalPath_.end());
 
-    //update();//refrescamos pantalla
-    return false;
+    done_ = true;
+    return true;
+
+     // AMGL// esto es lo que estaba anteriormente //ya no deberia ser util
+    // if( !qNew.empty() ){
+    //     const float distanceToGoal = configDistance(qNew, goalQ_);//Calculamos la distancia des qrand a la meta
+    //     if( distanceToGoal <= distToGoal_ ){
+    //         // Conectamos exactamente al goal del robot 0
+    //         tree_.emplace_back(goalQ_, static_cast<int>(tree_.size()) - 1);//conectamos la meta con el ultimo nodo agregado
+
+    //         // Backtracking del camino
+    //         finalPath_.clear();
+    //         nNodesPath_ = 0;
+    //         int index = static_cast<int>(tree_.size()) - 1;
+    //         while (index != -1 ){
+    //             finalPath_.push_back(index);
+    //             index = tree_[index].parent;
+    //             ++nNodesPath_;
+    //         }
+    //         std::reverse(finalPath_.begin(), finalPath_.end());
+
+    //         //TimerStop=1;
+    //         done_ = true;
+    //         return true;
+    //     }
+    // }
+
+    // //update();//refrescamos pantalla
+    // return false;
 }
 
 bool RRTPlanner::isDone() const
@@ -267,7 +358,7 @@ float RRTPlanner::configDistance(const std::vector<Config>& a,
     float sum = 0.0f;
     [[maybe_unused]] const float wth=diamRobot_*diamRobot_;//peso angular
 
-    for (int i = 0; i < numRobots_; ++i) {
+    for (int i = 0; i < numRobots_; ++i ){
         const float dx = a[i].x - b[i].x;
         const float dy = a[i].y - b[i].y;
 
@@ -289,7 +380,7 @@ std::vector<Config> RRTPlanner::steer(const std::vector<Config>& a,
     //float factor =stepSize / dist; //(dist > stepSize) ? (stepSize / dist) : 1.0f;
     const float factor = (distance > step) ? (step / distance) : 1.0f;
 
-    for (int i = 0; i < numRobots_; ++i) {
+    for (int i = 0; i < numRobots_; ++i ){
         qNew[i].x = a[i].x + factor * (b[i].x - a[i].x);//     dx[i] = b[i].x - a[i].x
         qNew[i].y = a[i].y + factor * (b[i].y - a[i].y);//     dy[i] = b[i].y - a[i].y
         //descomentar para contemlplar orientación, tener en cuebta que //dth[i]= atan2(sin(b[i].theta-a[i].theta),cos(b[i].theta-a[i].theta));
@@ -306,10 +397,10 @@ int RRTPlanner::getNearest(const std::vector<Config>& qRand)
     int index = 0;
     float minDistance = 1e9f;
 
-    for (int i = 0; i < static_cast<int>(tree_.size()); ++i) {
+    for (int i = 0; i < static_cast<int>(tree_.size()); ++i ){
         const float distance = configDistance(qRand, tree_[i].q);//Calculamos la distancia de qrand a cada configuración
 
-        if (distance < minDistance) {
+        if( distance < minDistance ){
             minDistance = distance;
             index = i;
         }
@@ -317,3 +408,38 @@ int RRTPlanner::getNearest(const std::vector<Config>& qRand)
 
     return index;
 }
+
+
+// OBSTACULOS
+
+void RRTPlanner::setObstacles(
+    const std::vector<PolygonObstacle>& obstacles)
+{
+    // collisionChecker_.setObstacles(obstacles);
+    // reset();
+}
+
+bool RRTPlanner::isConfigurationValid(
+    const std::vector<Config>& q) const
+{
+    return true;
+    // if( q.size() != static_cast<std::size_t>(numRobots_))
+    //     return false;
+
+    // return !collisionChecker_.configurationInCollision(q);
+}
+
+bool RRTPlanner::isEdgeValid(
+    const std::vector<Config>& from,
+    const std::vector<Config>& to) const
+{
+    return true;
+//     return !collisionChecker_.edgeInCollision(
+//         from, to, collisionCheckResolution_);
+}
+
+// PQPCollisionChecker::Statistics
+// RRTPlanner::getCollisionStatistics() const
+// {
+//     return collisionChecker_.statistics();
+// }

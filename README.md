@@ -10,12 +10,15 @@ Aplicación en C++17 y Qt 6 para visualizar un árbol RRT para múltiples robots
 
 * **`main.cpp`**: crea `QApplication` y la ventana principal `RRTWindow`.
 * **`RRTWindow` (`window.h` / `window.cpp`)**: construye la ventana, instala `RRTWidget` como widget central y solicita la configuración del escenario de demostración
-* **`DemoScenario` (`DemoScenario.h` / `DemoScenario.cpp`)**: contiene las posiciones iniciales y finales, velocidades, opciones de dibujo y parámetros del escenario de tres robots
+* **`DemoScenario` (`DemoScenario.h` / `DemoScenario.cpp`)**: carga las posiciones iniciales y finales, velocidades, opciones de dibujo y parámetros del escenario de tres robots de. archivo data/escenario.in
 * **`RRTWidget` (`widget.h` / `widget.cpp`)**: mantiene la capa Qt, el temporizador y el renderizado OpenGL. Delega el árbol en `IPlanner` y el movimiento Euler en `VelocityIntegrator`
 * **`IPlanner` (`IPlanner.h`)**: independiente de Qt: estructura general para marcar configurar, ejecutar y consultar un planificador
 * **`RRTPlanner` (`RRTPlanner.h` / `RRTPlanner.cpp`)**: implementa el algoritmo RRT para multirobots heredando de IPlanner, solo usa bibliotecas estándar de C++
 * **`VelocityIntegrator` (`VelocityIntegrator.h` / `VelocityIntegrator.cpp`)**: integra el movimiento sin depender de Qt y mantiene las velocidades y configuraciones de la simulación
-* **`Config.h`**: configuracion
+* **`Confing` (`Confing.h` y `.Confing.cpp`)**: configuracion
+* **`Obstacle` (`Obstacle.h`)**: 
+* **`PolygonGeometry` (`PolygonGeometry.h` / `PolygonGeometry.cpp`)**: Validar y triangular, se encarga de que los obstaculos sean poligonos validos
+* **`PQPCollision` (`PQPCollision.h` / `PQPCollision.cpp`)**: Usamos el repositorio[PQP - A Proximity Query Package](https://gamma.cs.unc.edu/SSV/)
 
 ## Estructura
 
@@ -24,12 +27,16 @@ include/
   Config.h
   DemoScenario.h
   IPlanner.h
+  PolygonGeoetry.h
+  PQPCollisio.h
   RRTPlanner.h
   VelocityIntegrator.h
   widget.h
   window.h
 src/
   DemoScenario.cpp
+  PolygonGeoetry.cpp
+  PQPCollisio.cpp
   RRTPlanner.cpp
   VelocityIntegrator.cpp
   main.cpp
