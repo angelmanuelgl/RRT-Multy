@@ -39,6 +39,22 @@ src/
 qt_rrt.pro
 ```
 
+# Como usarlo?
+
+## Escenario de prueba
+
+El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a `configureDemoScenario()` en `DemoScenario.cpp`
+
+`RRTWindow` ya no conoce directamente los parámetros numéricos del algoritmo es puramente de dibujos
+
+
+
+## Obstaculos
+
+
+
+# Informacion adicional
+
 ## Datos
 
 `include/Config.h` contiene:
@@ -99,12 +115,6 @@ En modo no-Euler:
 En modo Euler (EN PROCESO AUN...) se supone que el widget solicita al planner el primer tramo, 
 lo entrega a `VelocityIntegrator` y después coordina sus avances desde el temporizador
 `paintGL()` solo consulta referencias constantes y no modifica el estado del algoritmo ni de la simulación
-
-## Escenario de pruba
-
-El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a `configureDemoScenario()` en `DemoScenario.cpp`
-
-`RRTWindow` ya no conoce directamente los parámetros numéricos del algoritmo es puramente de dibujos
 
 
 
