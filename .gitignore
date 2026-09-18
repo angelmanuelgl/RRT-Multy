@@ -10,6 +10,15 @@ release/
 *.pro.user.*
 .qmake.stash
 
+# others
+moc_*.cpp
+moc_*.o
+Makefile
+
+third_party/PQP/*.o
+third_party/PQP/lib/
+
+
 # Object and binary files
 *.o
 *.obj

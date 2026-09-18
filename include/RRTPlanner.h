@@ -2,7 +2,7 @@
 
 #include "IPlanner.h"
 #include "PolygonGeometry.h"
-// #include "PQPCollisionChecker.h"
+#include "PQPCollision.h"
 #include <cstdint>
 #include <vector>
 
@@ -15,7 +15,7 @@ public:
     void setNumRobots(int n) override;
     void setObstacles( const std::vector<PolygonObstacle>& obstacles) override;
 
-    // PQPCollisionChecker::Statistics getCollisionStatistics() const;
+    PQPCollisionChecker::Statistics getCollisionStatistics() const;
 
     void setStepSize(float step) override;
     void setMaxNodes(int maxNodes) override;
@@ -43,7 +43,7 @@ private:
     int getNearest(const std::vector<Config>& qRand);
 
     // colissiones
-    // PQPCollisionChecker collisionChecker_;
+    PQPCollisionChecker collisionChecker_;
 
     double collisionCheckResolution_ = 2.5;
     bool problemChecked_ = false;

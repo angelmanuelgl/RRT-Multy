@@ -23,7 +23,7 @@ RRTPlanner::RRTPlanner()
 
 void RRTPlanner::setStart(const std::vector<Config>& q, float radius)
 {
-    // collisionChecker_.setRobotRadius(radius); // AMGL //
+    collisionChecker_.setRobotRadius(radius); // AMGL //
     collisionCheckResolution_ = radius / 2.0;
     originQ_ = q;
     originRadius_ = radius;
@@ -238,8 +238,8 @@ bool RRTPlanner::step()
 
 
     // realizamos las comprobacio antes de insertar qNew
-    // if (!isEdgeValid(qNear, qNew))
-    //     return false;
+    if (!isEdgeValid(qNear, qNew))
+        return false;
 
     //Insertar nuevo nodo
     const int newIndex = static_cast<int>(tree_.size());
@@ -254,8 +254,8 @@ bool RRTPlanner::step()
 
 
     // comprobar la conexion final
-    // if( !isEdgeValid(qNew, goalQ_) )
-    //     return false;
+    if( !isEdgeValid(qNew, goalQ_) )
+        return false;
 
     // Conectamos exactamente al goal del robot 0
     tree_.emplace_back(goalQ_, newIndex); //conectamos la meta con el ultimo nodo agregado
@@ -415,31 +415,31 @@ int RRTPlanner::getNearest(const std::vector<Config>& qRand)
 void RRTPlanner::setObstacles(
     const std::vector<PolygonObstacle>& obstacles)
 {
-    // collisionChecker_.setObstacles(obstacles);
-    // reset();
+    collisionChecker_.setObstacles(obstacles);
+    reset();
 }
 
 bool RRTPlanner::isConfigurationValid(
     const std::vector<Config>& q) const
 {
-    return true;
-    // if( q.size() != static_cast<std::size_t>(numRobots_))
-    //     return false;
+    // return true;
+    if( q.size() != static_cast<std::size_t>(numRobots_))
+        return false;
 
-    // return !collisionChecker_.configurationInCollision(q);
+    return !collisionChecker_.configurationInCollision(q);
 }
 
 bool RRTPlanner::isEdgeValid(
     const std::vector<Config>& from,
     const std::vector<Config>& to) const
 {
-    return true;
-//     return !collisionChecker_.edgeInCollision(
-//         from, to, collisionCheckResolution_);
+    // return true;
+    return !collisionChecker_.edgeInCollision(
+        from, to, collisionCheckResolution_);
 }
 
-// PQPCollisionChecker::Statistics
-// RRTPlanner::getCollisionStatistics() const
-// {
-//     return collisionChecker_.statistics();
-// }
+PQPCollisionChecker::Statistics
+RRTPlanner::getCollisionStatistics() const
+{
+    return collisionChecker_.statistics();
+}
