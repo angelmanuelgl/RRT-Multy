@@ -4,9 +4,11 @@ Aplicación en C++17 y Qt 6 para visualizar un árbol RRT para múltiples robots
 
 * la interfaz utiliza `QOpenGLWidget` y `QTimer`
 * el planificador RRT y el integrador Euler se encuentran desacoplados de Qt
+* verificador de colisiones basado en [PQP - A Proximity Query Package](https://gamma.cs.unc.edu/SSV/)
 
 
 ### RESUMEN principal
+s
 
 * **`main.cpp`**: crea `QApplication` y la ventana principal `RRTWindow`.
 * **`RRTWindow` (`window.h` / `window.cpp`)**: construye la ventana, instala `RRTWidget` como widget central y solicita la configuración del escenario de demostración
@@ -18,7 +20,10 @@ Aplicación en C++17 y Qt 6 para visualizar un árbol RRT para múltiples robots
 * **`Confing` (`Confing.h` y `.Confing.cpp`)**: configuracion
 * **`Obstacle` (`Obstacle.h`)**: 
 * **`PolygonGeometry` (`PolygonGeometry.h` / `PolygonGeometry.cpp`)**: Validar y triangular, se encarga de que los obstaculos sean poligonos validos
-* **`PQPCollision` (`PQPCollision.h` / `PQPCollision.cpp`)**: Usamos el repositorio[PQP - A Proximity Query Package](https://gamma.cs.unc.edu/SSV/)
+* **`PQPCollision` (`PQPCollision.h` / `PQPCollision.cpp`)**: Usamos el 
+repositorio [PQP - A Proximity Query Package](https://gamma.cs.unc.edu/SSV/)
+para verificar que la trayectoria hacia el nuevo nodos sno atraviese ningun obstaculo
+
 
 ## Estructura
 
@@ -33,6 +38,7 @@ include/
   VelocityIntegrator.h
   widget.h
   window.h
+  
 src/
   DemoScenario.cpp
   PolygonGeoetry.cpp
@@ -42,6 +48,12 @@ src/
   main.cpp
   widget.cpp
   window.cpp
+  thitd_party/
+    PQP
+    
+data/
+  escenario1.in
+  obstaculos1.ins
 
 qt_rrt.pro
 ```
@@ -50,13 +62,37 @@ qt_rrt.pro
 
 ## Escenario de prueba
 
-El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a `configureDemoScenario()` en `DemoScenario.cpp`
+El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a 
+`configureDemoScenario()` en `DemoScenario.cpp`  que lee desde los archivos
+data/
+  escenario1.in
+  obstaculos1.inss
 
-`RRTWindow` ya no conoce directamente los parámetros numéricos del algoritmo es puramente de dibujos
+El formato con el que se lee el input ess
+
+
+### Formato de Entrada
+
+**`escenario.in`**
+* **Línea 1:** $N$ (número de robots).s
+* **Siguientes $N$ líneas:** `xi yi thi  xf yf thf  Vxr Vyr Vangr`
+  * `xi, yi, thi`: Pose inicial $(x, y, \theta)$.
+  * `xf, yf, thf`: Pose objetivo $(x, y, \theta)$.
+  * `Vxr, Vyr, Vangr`: Límites de velocidad lineal y angular.
+
+**`obstaculos.in`**
+* **Línea 1:** $M$ (cantidad de obstáculos).
+* **Por cada obstáculo:**
+  * **Línea inicial:** `nombre V` (identificador y número de vértices $V \ge 3$).
+  * **Siguientes $V$ líneas:** `x y` (coordenadas de cada vértice).
 
 
 
-## Obstaculos
+
+## Compilacion
+
+El proyecto utiliza qmake y C++17:
+    lo recomendable es abrirse `qt_rrt.pro` directamente desde Qt Creator y compilarse con un kit de Qt 6.
 
 
 
@@ -152,7 +188,3 @@ lo entrega a `VelocityIntegrator` y después coordina sus avances desde el tempo
 - `computeVelocities()`, `VelocitiesRobots()` y `EulerMult()` actúan ahora como fachadas delgadas hacia `VelocityIntegrator`
 x
 
-## Compilacion
-
-El proyecto utiliza qmake y C++17:
-    lo recomendable es abrirse `qt_rrt.pro` directamente desde Qt Creator y compilarse con un kit de Qt 6.
