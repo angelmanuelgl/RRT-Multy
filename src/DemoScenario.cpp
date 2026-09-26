@@ -43,7 +43,7 @@ void configureDemoScenario(
         return;
     }
 
-    // internat que se guarden los obstaculos
+    // intenar que se guarden los obstaculos
     try {
         widget->SetObstacles(obstacles);
     } catch (const std::exception& ex) {
@@ -158,6 +158,7 @@ bool loadPolygonObstacles(const std::string& path, std::vector<PolygonObstacle>&
         temporary.push_back(std::move(obstacle));
     }
 
+    // ver si de caualiadad quedo algo mas
     file >> std::ws;
     if (!file.eof()) {
         LOG_WARN("Advertencia: Se encontraron datos adicionales no procesados al final de ", path);

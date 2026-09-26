@@ -64,7 +64,7 @@ private:
 
     float goalRadius_ = 5.0f;
     float originRadius_ = 5.0f;
-    float stepSize_ = 15.0f;//tamaño de paso
+    float stepSize_ = 8.0f;//15.0f tamaño de paso
     float distToGoal_ = 50.0f;
     float diamRobot_ = 5.0f;
 

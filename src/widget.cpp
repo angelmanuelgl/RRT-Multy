@@ -546,7 +546,7 @@ void RRTWidget::SetObstacles(
     velocityIntegrator_.setState(planner_->getOrigin());
     update();
 
-    // El escenario reanudará el timer al terminar de configurarse.
+    // El escenario reanudara el timer al terminar de configurarse.
 }
 
 void RRTWidget::drawObstacles()
