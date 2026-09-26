@@ -1,7 +1,9 @@
 #pragma once
 
 #include "IPlanner.h"
-
+#include "PolygonGeometry.h"
+#include "PQPCollision.h"
+#include <cstdint>
 #include <vector>
 
 class RRTPlanner : public IPlanner {
@@ -11,6 +13,9 @@ public:
     void setStart(const std::vector<Config>& q, float radius) override;
     void setGoal(const std::vector<Config>& q, float radius) override;
     void setNumRobots(int n) override;
+    void setObstacles( const std::vector<PolygonObstacle>& obstacles) override;
+
+    PQPCollisionChecker::Statistics getCollisionStatistics() const;
 
     void setStepSize(float step) override;
     void setMaxNodes(int maxNodes) override;
@@ -28,7 +33,6 @@ public:
 
     int getNodeCount() const override;
     int getPathNodeCount() const override;
-
 private:
     float randFloat(float min, float max);
     float configDistance(const std::vector<Config>& a,
@@ -38,6 +42,21 @@ private:
                               float step);
     int getNearest(const std::vector<Config>& qRand);
 
+    // colissiones
+    PQPCollisionChecker collisionChecker_;
+
+    double collisionCheckResolution_ = 2.5;
+    bool problemChecked_ = false;
+
+    // limite de intentos de muestras
+    std::uint64_t attempts_ = 0;
+    std::uint64_t maxAttempts_ = 200000;
+
+    bool isConfigurationValid(const std::vector<Config>& q) const;
+    bool isEdgeValid(const std::vector<Config>& from,
+                     const std::vector<Config>& to) const;
+
+    // el arbol
     std::vector<PlanNode> tree_;//conjunto de nodos actuales (Cada nodo guarda (x,y) y parent)
     std::vector<int> finalPath_;  // indices de los nodos en el camino final
     std::vector<Config> goalQ_;//meta a llegar
@@ -45,7 +64,7 @@ private:
 
     float goalRadius_ = 5.0f;
     float originRadius_ = 5.0f;
-    float stepSize_ = 15.0f;//tamaño de paso
+    float stepSize_ = 8.0f;//15.0f tamaño de paso
     float distToGoal_ = 50.0f;
     float diamRobot_ = 5.0f;
 

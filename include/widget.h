@@ -3,6 +3,7 @@
 #include <QTimer>
 #include "IPlanner.h" //clase general // aqui esta el RTT
 #include "VelocityIntegrator.h"
+#include "Obstacle.h"
 #include <memory>
 
 
@@ -15,6 +16,10 @@ public:
     //QPointF ReadOriginTreePos() const {return QPointF(originX, originY, originTH);}
     //QPointF ReadGoalTreePos() const {return QPointF(goalX, goalY, goalTH);}
     int ReadTimeGrow() const{return timeGrowMs_;}
+
+    // obstaculos
+    void SetObstacles(const std::vector<PolygonObstacle>& obstacles);
+    void StopPlanning();
 
     bool ActiveEuler=true;//new
 
@@ -45,6 +50,9 @@ private:
     // avanzar en lineas rectas // metodo de euler // o
     VelocityIntegrator velocityIntegrator_;
 
+    // obstaculos
+    std::vector<PolygonObstacle> obstacles_;
+    void drawObstacles();
 
     QTimer timer_; //temporizador que activa el arbol
     bool drawAllNodes_=true;

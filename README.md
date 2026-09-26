@@ -4,18 +4,26 @@ Aplicación en C++17 y Qt 6 para visualizar un árbol RRT para múltiples robots
 
 * la interfaz utiliza `QOpenGLWidget` y `QTimer`
 * el planificador RRT y el integrador Euler se encuentran desacoplados de Qt
+* verificador de colisiones basado en [PQP - A Proximity Query Package](https://gamma.cs.unc.edu/SSV/)
 
 
 ### RESUMEN principal
+s
 
 * **`main.cpp`**: crea `QApplication` y la ventana principal `RRTWindow`.
 * **`RRTWindow` (`window.h` / `window.cpp`)**: construye la ventana, instala `RRTWidget` como widget central y solicita la configuración del escenario de demostración
-* **`DemoScenario` (`DemoScenario.h` / `DemoScenario.cpp`)**: contiene las posiciones iniciales y finales, velocidades, opciones de dibujo y parámetros del escenario de tres robots
+* **`DemoScenario` (`DemoScenario.h` / `DemoScenario.cpp`)**: carga las posiciones iniciales y finales, velocidades, opciones de dibujo y parámetros del escenario de tres robots de. archivo data/escenario.in
 * **`RRTWidget` (`widget.h` / `widget.cpp`)**: mantiene la capa Qt, el temporizador y el renderizado OpenGL. Delega el árbol en `IPlanner` y el movimiento Euler en `VelocityIntegrator`
 * **`IPlanner` (`IPlanner.h`)**: independiente de Qt: estructura general para marcar configurar, ejecutar y consultar un planificador
 * **`RRTPlanner` (`RRTPlanner.h` / `RRTPlanner.cpp`)**: implementa el algoritmo RRT para multirobots heredando de IPlanner, solo usa bibliotecas estándar de C++
 * **`VelocityIntegrator` (`VelocityIntegrator.h` / `VelocityIntegrator.cpp`)**: integra el movimiento sin depender de Qt y mantiene las velocidades y configuraciones de la simulación
-* **`Config.h`**: configuracion
+* **`Confing` (`Confing.h` y `.Confing.cpp`)**: configuracion
+* **`Obstacle` (`Obstacle.h`)**: 
+* **`PolygonGeometry` (`PolygonGeometry.h` / `PolygonGeometry.cpp`)**: Validar y triangular, se encarga de que los obstaculos sean poligonos validos
+* **`PQPCollision` (`PQPCollision.h` / `PQPCollision.cpp`)**: Usamos el 
+repositorio [PQP - A Proximity Query Package](https://gamma.cs.unc.edu/SSV/)
+para verificar que la trayectoria hacia el nuevo nodos sno atraviese ningun obstaculo
+
 
 ## Estructura
 
@@ -24,20 +32,71 @@ include/
   Config.h
   DemoScenario.h
   IPlanner.h
+  PolygonGeoetry.h
+  PQPCollisio.h
   RRTPlanner.h
   VelocityIntegrator.h
   widget.h
   window.h
+  
 src/
   DemoScenario.cpp
+  PolygonGeoetry.cpp
+  PQPCollisio.cpp
   RRTPlanner.cpp
   VelocityIntegrator.cpp
   main.cpp
   widget.cpp
   window.cpp
+  thitd_party/
+    PQP
+    
+data/
+  escenario1.in
+  obstaculos1.ins
 
 qt_rrt.pro
 ```
+
+# Como usarlo?
+
+## Escenario de prueba
+
+El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a 
+`configureDemoScenario()` en `DemoScenario.cpp`  que lee desde los archivos
+data/
+  escenario1.in
+  obstaculos1.inss
+
+El formato con el que se lee el input ess
+
+
+### Formato de Entrada
+
+**`escenario.in`**
+* **Línea 1:** $N$ (número de robots).s
+* **Siguientes $N$ líneas:** `xi yi thi  xf yf thf  Vxr Vyr Vangr`
+  * `xi, yi, thi`: Pose inicial $(x, y, \theta)$.
+  * `xf, yf, thf`: Pose objetivo $(x, y, \theta)$.
+  * `Vxr, Vyr, Vangr`: Límites de velocidad lineal y angular.
+
+**`obstaculos.in`**
+* **Línea 1:** $M$ (cantidad de obstáculos).
+* **Por cada obstáculo:**
+  * **Línea inicial:** `nombre V` (identificador y número de vértices $V \ge 3$).
+  * **Siguientes $V$ líneas:** `x y` (coordenadas de cada vértice).
+
+
+
+
+## Compilacion
+
+El proyecto utiliza qmake y C++17:
+    lo recomendable es abrirse `qt_rrt.pro` directamente desde Qt Creator y compilarse con un kit de Qt 6.
+
+
+
+# Informacion adicional
 
 ## Datos
 
@@ -100,12 +159,6 @@ En modo Euler (EN PROCESO AUN...) se supone que el widget solicita al planner el
 lo entrega a `VelocityIntegrator` y después coordina sus avances desde el temporizador
 `paintGL()` solo consulta referencias constantes y no modifica el estado del algoritmo ni de la simulación
 
-## Escenario de pruba
-
-El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a `configureDemoScenario()` en `DemoScenario.cpp`
-
-`RRTWindow` ya no conoce directamente los parámetros numéricos del algoritmo es puramente de dibujos
-
 
 
 ## Cambios hechos
@@ -135,7 +188,3 @@ El escenario que antes estaba dentro del constructor de `RRTWindow` fue movido a
 - `computeVelocities()`, `VelocitiesRobots()` y `EulerMult()` actúan ahora como fachadas delgadas hacia `VelocityIntegrator`
 x
 
-## Compilacion
-
-El proyecto utiliza qmake y C++17:
-    lo recomendable es abrirse `qt_rrt.pro` directamente desde Qt Creator y compilarse con un kit de Qt 6.
