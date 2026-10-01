@@ -30,5 +30,5 @@ bool loadScene(
 
 void configureDemoScenario(
     RRTWidget* widget,
-    const std::string& ruta = "../../data/escenario1.in",
-    const std::string& rutaObstaculos = "../../data/obstaculos1.in");
+    const std::string& ruta = "/data/escenario1.in",
+    const std::string& rutaObstaculos = "/data/obstaculos1.in");

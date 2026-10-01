@@ -1,5 +1,6 @@
 #include "PQPCollision.h"
 #include "PolygonGeometry.h"
+#include "logger.h"
 
 // TODO
 #include "PQP.h"
@@ -24,6 +25,7 @@ constexpr int circleSegments = 32;
 void checkPQP(int code, const char* operation)
 {
     if(  code != PQP_OK ){
+        LOG_FATAL("Fallo interno de PQP en ", operation, ": codigo=", code);
         throw std::runtime_error(
             std::string(operation) + ": error PQP "
             + std::to_string(code));
@@ -43,6 +45,8 @@ void identity(PQP_REAL R[3][3])
 // poligono circunscrito al disco (32 puntos_
 std::unique_ptr<PQP_Model> makeDisk(double radius)
 {
+    LOG_DEBUG("Construyendo modelo PQP del robot: radio=", radius,
+              ", segmentos=", circleSegments);
     auto model = std::make_unique<PQP_Model>();
     checkPQP(model->BeginModel(circleSegments), "BeginModel(robot)");
 
@@ -71,12 +75,15 @@ std::unique_ptr<PQP_Model> makeDisk(double radius)
     }
 
     checkPQP(model->EndModel(), "EndModel(robot)");
+    LOG_SUCCESS("Modelo PQP del robot construido: triangulos=", circleSegments);
     return model;
 }
 
 std::unique_ptr<PQP_Model> makeObstacle(
     const PolygonObstacle& input)
 {
+    LOG_DEBUG("Construyendo modelo PQP de obstaculo: nombre=", input.name,
+              ", vertices=", input.vertices.size());
     // revisamos que el poligono si cumpla las condicones de poligono
     auto polygon = input;
     preparePolygon(polygon);
@@ -110,6 +117,8 @@ std::unique_ptr<PQP_Model> makeObstacle(
     }
 
     checkPQP(model->EndModel(), "EndModel(obstaculo)");
+    LOG_DEBUG("Modelo PQP de obstaculo listo: nombre=", input.name,
+              ", triangulos=", polygon.triangles.size());
     return model;
 }
 
@@ -159,6 +168,9 @@ struct PQPCollisionChecker::Impl {
         stats.bvTests += result.NumBVTests();
         stats.triangleTests += result.NumTriTests();
 
+        if (result.Colliding() != 0)
+            LOG_TRACE("PQP detecto colision: A=(", ax, ",", ay,
+                      "), B=(", bx, ",", by, ")");
         return result.Colliding() != 0;
     }
 };
@@ -169,6 +181,7 @@ struct PQPCollisionChecker::Impl {
 PQPCollisionChecker::PQPCollisionChecker()
     : impl_(std::make_unique<Impl>())
 {
+    LOG_SUCCESS("Verificador de colisiones PQP inicializado");
 }
 
 PQPCollisionChecker::~PQPCollisionChecker() = default;
@@ -177,16 +190,20 @@ PQPCollisionChecker::~PQPCollisionChecker() = default;
 // seters
 void PQPCollisionChecker::setRobotRadius(double radius)
 {
-    if(  !std::isfinite(radius) || radius <= 0.0)
+    if(  !std::isfinite(radius) || radius <= 0.0) {
+        LOG_ERROR("Radio de robot invalido para PQP: ", radius);
         throw std::invalid_argument("Radio invalido");
+    }
 
     auto replacement = makeDisk(radius);
     impl_->robot = std::move(replacement);
+    LOG_SUCCESS("Radio del modelo de robot actualizado: ", radius);
 }
 
 void PQPCollisionChecker::setObstacles(
     const std::vector<PolygonObstacle>& obstacles)
 {
+    LOG_INFO("Preparando modelos PQP de obstaculos: total=", obstacles.size());
     std::vector<std::unique_ptr<PQP_Model>> replacement;
     replacement.reserve(obstacles.size());
 
@@ -194,6 +211,8 @@ void PQPCollisionChecker::setObstacles(
         replacement.push_back(makeObstacle(obstacle));
 
     impl_->obstacles = std::move(replacement);
+    LOG_SUCCESS("Modelos PQP de obstaculos configurados: total=",
+                impl_->obstacles.size());
 }
 
 
@@ -203,19 +222,26 @@ void PQPCollisionChecker::setObstacles(
 bool PQPCollisionChecker::configurationInCollision(
     const std::vector<Config>& q) const
 {
-    if(  q.empty())
+    if(  q.empty()) {
+        LOG_ERROR("No se puede comprobar una configuracion vacia");
         throw std::invalid_argument("Configuracion vacia");
+    }
 
     // colisiones robot - obstaculo
     for( const auto& robot : q ){
-        if(  !finiteConfig(robot))
+        if(  !finiteConfig(robot)) {
+            LOG_ERROR("Robot con estado no finito: (", robot.x, ",",
+                      robot.y, ",", robot.theta, ")");
             throw std::invalid_argument("Configuracion no finita");
+        }
 
 
         for( const auto& obstacle : impl_->obstacles ){
             if(  impl_->collides(
                     impl_->robot.get(), robot.x, robot.y,
                     obstacle.get(), 0.0, 0.0) ){
+                LOG_TRACE("Colision robot-obstaculo: robot=(", robot.x,
+                          ",", robot.y, ")");
                 return true;
             }
         }
@@ -228,6 +254,7 @@ bool PQPCollisionChecker::configurationInCollision(
             if(  impl_->collides(
                     impl_->robot.get(), q[i].x, q[i].y,
                     impl_->robot.get(), q[j].x, q[j].y) ){
+                LOG_TRACE("Colision robot-robot: indices=", i, ",", j);
                 return true;
             }
         }
@@ -243,17 +270,24 @@ bool PQPCollisionChecker::edgeInCollision(
     const std::vector<Config>& to,
     double resolution) const
 {
-    if(  from.empty() || from.size() != to.size())
+    if(  from.empty() || from.size() != to.size()) {
+        LOG_ERROR("Arista con dimensiones invalidas: origen=", from.size(),
+                  ", destino=", to.size());
         throw std::invalid_argument("Dimensiones de arista invalidas");
+    }
 
-    if(  !std::isfinite(resolution) || resolution <= 0.0)
+    if(  !std::isfinite(resolution) || resolution <= 0.0) {
+        LOG_ERROR("Resolucion de colision invalida: ", resolution);
         throw std::invalid_argument("Resolucion invalida");
+    }
 
     double maxDistance = 0.0;
 
     for( std::size_t i = 0; i < from.size();  i++){
-        if(  !finiteConfig(from[i]) || !finiteConfig(to[i]))
+        if(  !finiteConfig(from[i]) || !finiteConfig(to[i])) {
+            LOG_ERROR("Extremo no finito en arista para robot ", i);
             throw std::invalid_argument("Extremo de arista no finito");
+        }
 
         const double dx = double(to[i].x) - from[i].x;
         const double dy = double(to[i].y) - from[i].y;
@@ -263,11 +297,16 @@ bool PQPCollisionChecker::edgeInCollision(
     const double required = std::ceil(maxDistance / resolution);
 
     // para no hacer tantas muestras, y que sea tan tardadp
-    if(  !std::isfinite(required) || required > 1000000.0)
+    if(  !std::isfinite(required) || required > 1000000.0) {
+        LOG_ERROR("Muestreo de arista fuera de rango: muestras=", required,
+                  ", resolucion=", resolution);
         throw std::invalid_argument("Demasiadas muestras por arista");
+    }
 
     const int steps = std::max(1, static_cast<int>(required));
     std::vector<Config> sample(from.size());
+    LOG_TRACE("Comprobando arista: robots=", from.size(),
+              ", muestras=", steps + 1);
 
     for( int k = 0; k <= steps; ++k ){
         const double t = double(k) / steps;
@@ -283,10 +322,13 @@ bool PQPCollisionChecker::edgeInCollision(
             sample[i].theta = from[i].theta;
         }
 
-        if(  configurationInCollision(sample))
+        if(  configurationInCollision(sample)) {
+            LOG_TRACE("Colision en arista: muestra=", k, "/", steps);
             return true;
+        }
     }
 
+    LOG_TRACE("Arista libre de colisiones: muestras=", steps + 1);
     return false;
 }
 
@@ -299,4 +341,5 @@ PQPCollisionChecker::statistics() const
 void PQPCollisionChecker::resetStatistics()
 {
     impl_->stats = {};
+    LOG_DEBUG("Estadisticas de colision reiniciadas");
 }

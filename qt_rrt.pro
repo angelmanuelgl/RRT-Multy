@@ -2,6 +2,9 @@ QT += core gui opengl widgets openglwidgets
 
 CONFIG += c++17
 
+# amgl // visual // Conserva la ubicacion de los datos sin depender del directorio de ejecucion.
+DEFINES += RRT_PROJECT_DIR=\\\"$$PWD\\\"
+
 
 # para incluir PQP
 # PQP_ROOT = /home/angelgl/PQP
@@ -44,6 +47,7 @@ HEADERS += \
     include/Obstacle.h \
     include/PQPCollision.h \
     include/PolygonGeometry.h \
+    include/logger.h \
     include/widget.h \
     include/window.h \
     include/Config.h \

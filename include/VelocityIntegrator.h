@@ -29,7 +29,9 @@ private:
     std::vector<Config> next_;//new
     std::vector<Config> current_;//new
     std::vector<Config> previous_;//new
+    std::vector<Config> target_;// amgl // visual
     bool segmentReady_ = false;//new //Requerimos calcular las velocidades entre dos puntos para un cierto tiempo?
+    float remainingTime_ = 0.0f;// amgl // visual
 
     //int NEulerTimes=10;//división del tramo//new
 };

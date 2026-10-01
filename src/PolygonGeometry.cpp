@@ -1,4 +1,5 @@
 #include "PolygonGeometry.h"
+#include "logger.h"
 
 #include <algorithm>
 #include <cmath>
@@ -77,24 +78,34 @@ bool insideTriangle(const Point2D& p,
 
 void preparePolygon(PolygonObstacle& polygon)
 {
+    LOG_DEBUG("Validando poligono: nombre=", polygon.name,
+              ", vertices=", polygon.vertices.size());
     // trabajamos sobre copia: no modificar el objeto por si falla
     auto vertices = polygon.vertices;
     const std::size_t n = vertices.size();
 
     // CASOS DEGENERADOS
 
-    if (n < 3)
+    if (n < 3) {
+        LOG_ERROR("Poligono con vertices insuficientes: nombre=", polygon.name,
+                  ", vertices=", n);
         throw std::invalid_argument("Se requieren al menos 3 vertices");
+    }
 
      for( const auto& p : vertices  ){
-        if (!std::isfinite(p.x) || !std::isfinite(p.y))
+        if (!std::isfinite(p.x) || !std::isfinite(p.y)) {
+            LOG_ERROR("Coordenada no finita en poligono: nombre=", polygon.name);
             throw std::invalid_argument("Coordenada no finita");
+        }
     }
 
      for( std::size_t i = 0; i < n; ++i  ){
          for( std::size_t j = i + 1; j < n; ++j  ){
-            if (samePoint(vertices[i], vertices[j]))
+            if (samePoint(vertices[i], vertices[j])) {
+                LOG_ERROR("Vertices repetidos en poligono ", polygon.name,
+                          ": indices=", i, ",", j);
                 throw std::invalid_argument("Vertices repetidos");
+            }
         }
 
         const auto& a = vertices[(i + n - 1) % n];
@@ -102,6 +113,8 @@ void preparePolygon(PolygonObstacle& polygon)
         const auto& c = vertices[(i + 1) % n];
 
         if (std::abs(cross(a, b, c)) <= areaEps  ){
+            LOG_ERROR("Vertices consecutivos colineales en poligono ",
+                      polygon.name, ": indice=", i);
             throw std::invalid_argument(
                 "Vertices consecutivos colineales: se selimina el redundante");
         }
@@ -119,6 +132,8 @@ void preparePolygon(PolygonObstacle& polygon)
 
             if (segmentsIntersect(vertices[i], vertices[iNext],
                                   vertices[j], vertices[jNext])  ){
+                LOG_ERROR("Autointerseccion en poligono ", polygon.name,
+                          ": aristas=", i, ",", j);
                 throw std::invalid_argument(
                     "Poligono con autointersecciones");
             }
@@ -132,11 +147,16 @@ void preparePolygon(PolygonObstacle& polygon)
         twiceArea += a.x * b.y - a.y * b.x;
     }
 
-    if (std::abs(twiceArea) <= areaEps)
+    if (std::abs(twiceArea) <= areaEps) {
+        LOG_ERROR("Poligono con area cero: nombre=", polygon.name);
         throw std::invalid_argument("Poligono con area cero");
+    }
 
-    if (twiceArea < 0.0)
+    if (twiceArea < 0.0) {
+        LOG_WARN("Orientacion horaria corregida automaticamente: nombre=",
+                 polygon.name);
         std::reverse(vertices.begin(), vertices.end());
+    }
 
     // AHORA SI
 
@@ -178,12 +198,16 @@ void preparePolygon(PolygonObstacle& polygon)
                 continue;
 
             triangles.push_back(Triangle2D{a, b, c});
+            LOG_TRACE("Oreja triangulada: poligono=", polygon.name,
+                      ", vertices_restantes=", count - 1);
             indices.erase(indices.begin() + k);
             clipped = true;
             break;
         }
 
         if (!clipped  ){
+            LOG_ERROR("Triangulacion sin convergencia: poligono=", polygon.name,
+                      ", vertices_restantes=", indices.size());
             throw std::invalid_argument(
                 "Triangulacion fallida: geometria degenerada "
                 "o precision insuficiente");
@@ -194,11 +218,15 @@ void preparePolygon(PolygonObstacle& polygon)
     const auto& b = vertices[indices[1]];
     const auto& c = vertices[indices[2]];
 
-    if (cross(a, b, c) <= areaEps)
+    if (cross(a, b, c) <= areaEps) {
+        LOG_ERROR("Triangulo final degenerado: poligono=", polygon.name);
         throw std::invalid_argument("Triangulo final degenerado");
+    }
 
     triangles.push_back(Triangle2D{a, b, c});
 
     polygon.vertices = std::move(vertices);
     polygon.triangles = std::move(triangles);
+    LOG_SUCCESS("Poligono validado y triangulado: nombre=", polygon.name,
+                ", triangulos=", polygon.triangles.size());
 }

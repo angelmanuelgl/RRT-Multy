@@ -1,10 +1,12 @@
 #include "window.h"
 #include "DemoScenario.h"
 #include "widget.h"
+#include "logger.h"
 
 //Constructor del RRTWindow, llama al contructor base QWidget *parent
 //para inicializar con su posible padre (normalmente nullptr)
 RRTWindow::RRTWindow(QWidget *parent) : QMainWindow(parent) {
+    LOG_INFO("Construyendo ventana principal del visualizador RRT");
     setWindowTitle("RRT");//Titulo de la ventana
 
     //Se crea un RRTWidget y se pone como "central widget"
@@ -21,8 +23,9 @@ RRTWindow::RRTWindow(QWidget *parent) : QMainWindow(parent) {
     // vectorces de velocidad
     // posiciones de origen
     // posiciones de meta
-    // parametros RTT 
+    // parametros RTT
     configureDemoScenario(w);
 
     resize(500, 500);
+    LOG_SUCCESS("Ventana principal inicializada: tamano=500x500");
 }
