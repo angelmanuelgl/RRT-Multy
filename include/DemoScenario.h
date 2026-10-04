@@ -20,6 +20,8 @@ struct SceneData {
     std::vector<float> Vxr, Vyr, Vangr;
 };
 
+std::string encontrarPath(const std::string& path, int max_niveles = 20);
+
 bool loadPolygonObstacles(
     const std::string& path,
     std::vector<PolygonObstacle>& output);

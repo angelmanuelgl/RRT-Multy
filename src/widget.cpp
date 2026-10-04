@@ -29,8 +29,8 @@ RRTWidget::RRTWidget(QWidget *parent)
 {
     //**opcional porque asi se inicializa con un robot********
     //verificar que la configuración de origen tenga al menos un robot
+
     const auto &originQ = planner_->getOrigin();
-    //**opcional porque asi se inicializa con un robot********
 
 
 
@@ -44,7 +44,7 @@ RRTWidget::RRTWidget(QWidget *parent)
     createOverlayPanel();
     phaseTimer_.setInterval(450);
     connect(&phaseTimer_, &QTimer::timeout,
-            this, &RRTWidget::advanceConceptualPhase);
+            this, &RRTWidget::sigueinteFase);
 
     //cada timeGrow=30 ms nos conectamos al arbol llamando a growtree
     //para expandir el arbol
@@ -63,30 +63,31 @@ void RRTWidget::setPlanner(std::shared_ptr<IPlanner> planner)
         return;
     }
 
-    // AMGL // conservar obstaculos al intercambiar la implementacion del planner
+    // AMGL // obstaculos
     planner->setObstacles(obstacles_);
     planner_ = std::move(planner);
     velocityIntegrator_.setState(planner_->getOrigin());
+    LOG_SUCCESS("Planner instalado en RRTWidget: obstaculos=", obstacles_.size(),
+                ", robots=", planner_->getNumRobots());
     // amgl // visual
     executedSteps_ = 0;
     conceptualPhase_ = 0;
     accumulatedElapsedMs_ = 0;
     paused_ = false;
     setVisualState(VisualState::Preparing);
-    startElapsedTime();
+    startTiempo();
     refreshOverlay();
     update();
-    LOG_SUCCESS("Planner instalado en RRTWidget: obstaculos=", obstacles_.size(),
-                ", robots=", planner_->getNumRobots());
+
 }
 
-//aqui inicializamos el opengl (solo se llama una vez) y se define el color de fonde (blanco en este caso)
+//aqui inicializamos el opengl (solo se llama una vez) y se define el color de fondeo (blanco en este caso)
 void RRTWidget::initializeGL() {
     // amgl // visual
     glClearColor(0.965f, 0.975f, 0.985f, 1.0f);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    LOG_SUCCESS("Contexto OpenGL inicializado para el visualizador RRT");
+    LOG_SUCCESS("OpenGL inicializado");
 }
 
 void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
@@ -94,8 +95,8 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
 {
     if (Nrobots <= 0)
     {
-        LOG_ERROR("Origen invalido: numero de robots=", Nrobots);
-        qWarning("OriginTree: NRobots <= 0");
+        LOG_ERROR("invalido ---  numero de robots=", Nrobots);
+        // qWarning("OriginTree: NRobots <= 0");
         return;
     }
     if (x.size() < static_cast<std::size_t>(Nrobots)
@@ -103,23 +104,24 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
         || th.size() < static_cast<std::size_t>(Nrobots)) {
         LOG_ERROR("Datos de origen insuficientes: robots=", Nrobots,
                   ", x=", x.size(), ", y=", y.size(), ", theta=", th.size());
-        qWarning("OriginTree: datos insuficientes");
+        // qWarning("OriginTree: datos insuficientes");
         setVisualState(VisualState::InvalidConfiguration);
         return;
     }
 
 
-    std::vector<Config> origin(Nrobots);//Actualizar numero de robots
+    //Actualizar numero de robots
+    std::vector<Config> origin(Nrobots);
 
     //AMGL// Next y Curr estan en VelocityIntegrator
 
+    //Tomando coordenadas de robots en la configuración origen
     for(int i=0;i<Nrobots; i++)
     {
-        origin[i]={x[i],y[i],th[i]};//Tomando coordenadas de robots en la configuración origen
+        origin[i]={x[i],y[i],th[i]};
     }
 
-    originRadius_=radio;//radio del robot
-
+    originRadius_=radio; //radio del robot
 
     velocityIntegrator_.setState(origin);
     planner_->setNumRobots(Nrobots);
@@ -131,7 +133,7 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
     accumulatedElapsedMs_ = 0;
     paused_ = false;
     setVisualState(VisualState::Preparing);
-    startElapsedTime();
+    startTiempo();
     phaseTimer_.start();
 
     //Reset para la nueva posición de inicio (de otro modo lee la default)
@@ -256,20 +258,27 @@ void RRTWidget::SetTimeGrow(int Tgrow){//Tiempo de crecimiento en cada iteracion
     glMatrixMode(GL_MODELVIEW);
 }*/
 
-void RRTWidget::resizeGL(int w, int h)// con escalado de acuerdo al aspecto
+
+// -- // -- // -- // -- // -- // -- // -- // -- // -- // -- -- // -- // -- // -- // -- // -- // -- // -- // -- // -- //
+// //                                         // amgl // visual
+//                                                Interface
+// -- // -- // -- // -- // -- // -- // -- // -- // -- // -- -- // -- // -- // -- // -- // -- // -- // -- // -- // -- //
+
+// con escalado de acuerdo al aspecto
+void RRTWidget::resizeGL(int w, int h)
 {
-    // amgl // visual
+
     applyProjection(w, h);
 }
 
-// amgl // visual // Reubica el panel superpuesto cuando cambia el tamano del widget.
+// reubica el panel superpuesto cuando cambia el tamano del widget
 void RRTWidget::resizeEvent(QResizeEvent *event)
 {
     QOpenGLWidget::resizeEvent(event);
     positionOverlay();
 }
 
-// amgl // visual // Controla el zoom mediante la rueda del raton.
+// controla el zoom mediante la rueda del raton
 void RRTWidget::wheelEvent(QWheelEvent *event)
 {
     if (event->angleDelta().y() > 0)
@@ -279,7 +288,7 @@ void RRTWidget::wheelEvent(QWheelEvent *event)
     event->accept();
 }
 
-// amgl // visual // Ofrece atajos de teclado para pausa, paso y zoom.
+// atajos de teclado para pausa, paso y zoom
 void RRTWidget::keyPressEvent(QKeyEvent *event)
 {
     switch (event->key()) {
@@ -291,16 +300,16 @@ void RRTWidget::keyPressEvent(QKeyEvent *event)
         stepOnce();
         return;
     case Qt::Key_Left:
-        panCamera(-25.0f / zoomFactor_, 0.0f);
+        moverCamara(-25.0f / zoomFactor_, 0.0f);
         return;
     case Qt::Key_Right:
-        panCamera(25.0f / zoomFactor_, 0.0f);
+        moverCamara(25.0f / zoomFactor_, 0.0f);
         return;
     case Qt::Key_Up:
-        panCamera(0.0f, -25.0f / zoomFactor_);
+        moverCamara(0.0f, -25.0f / zoomFactor_);
         return;
     case Qt::Key_Down:
-        panCamera(0.0f, 25.0f / zoomFactor_);
+        moverCamara(0.0f, 25.0f / zoomFactor_);
         return;
     case Qt::Key_Plus:
     case Qt::Key_Equal:
@@ -317,7 +326,7 @@ void RRTWidget::keyPressEvent(QKeyEvent *event)
     }
 }
 
-// amgl // visual // Inicia el desplazamiento de camara mediante arrastre.
+// inicia el desplazamiento de camara mediante arrastre.
 void RRTWidget::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton
@@ -333,7 +342,9 @@ void RRTWidget::mousePressEvent(QMouseEvent *event)
     QOpenGLWidget::mousePressEvent(event);
 }
 
-// amgl // visual // Acumula el desplazamiento de camara durante el arrastre.
+
+// PARA MANTENER PRESIONADOS Y MOVER
+// acumular el desplazamiento de camara durante el arrastre
 void RRTWidget::mouseMoveEvent(QMouseEvent *event)
 {
     if (!panning_ || width() <= 0 || height() <= 0) {
@@ -349,15 +360,17 @@ void RRTWidget::mouseMoveEvent(QMouseEvent *event)
     const float aspect = static_cast<float>(width()) / static_cast<float>(height());
     const float visibleW = aspect > 1.0f
         ? baseVisibleWorld * aspect : baseVisibleWorld;
+
+    //
     const float visibleH = aspect < 1.0f
         ? baseVisibleWorld / aspect : baseVisibleWorld;
 
-    panCamera(-pixelDelta.x() * visibleW / static_cast<float>(width()),
+    moverCamara(-pixelDelta.x() * visibleW / static_cast<float>(width()),
               -pixelDelta.y() * visibleH / static_cast<float>(height()));
     event->accept();
 }
 
-// amgl // visual // Finaliza el desplazamiento de camara mediante arrastre.
+// finaliza el desplazamiento de camara mediante arrastre
 void RRTWidget::mouseReleaseEvent(QMouseEvent *event)
 {
     if (panning_ && (event->button() == Qt::LeftButton
@@ -371,10 +384,12 @@ void RRTWidget::mouseReleaseEvent(QMouseEvent *event)
     QOpenGLWidget::mouseReleaseEvent(event);
 }
 
-// amgl // visual // Construye el panel HUD y conecta sus controles.
+
+
+// panel HUD y conectar sus controles
 void RRTWidget::createOverlayPanel()
 {
-    // amgl // visual
+    // estulo visual
     const QString panelStyle = QStringLiteral(
         "QFrame[rrtPanel=\"true\"] { background: rgba(20, 29, 43, 205);"
         " border: 1px solid rgba(255,255,255,40); border-radius: 9px; }"
@@ -387,6 +402,7 @@ void RRTWidget::createOverlayPanel()
         "QPushButton:pressed { background: rgba(46,83,132,240); }"
         "QPushButton:disabled { color: #8390a3; background: rgba(45,55,70,180); }");
 
+    // para mas facil
     auto createPanel = [this, &panelStyle]() {
         auto *panel = new QFrame(this);
         panel->setProperty("rrtPanel", true);
@@ -457,7 +473,8 @@ void RRTWidget::createOverlayPanel()
     positionOverlay();
 }
 
-// amgl // visual // Sincroniza textos, contadores y botones del HUD.
+// PARA SINCRONIZAR LA INTERFACE
+// textos, contadores y botones
 void RRTWidget::refreshOverlay()
 {
     if (!statusPanel_ || !telemetryPanel_
@@ -476,16 +493,16 @@ void RRTWidget::refreshOverlay()
     case VisualState::InvalidConfiguration: stateText = QStringLiteral("Configuración inválida"); break;
     }
 
-    static const char *const phases[] = {
-        "Muestreando: q_rand <- RANDOM_STATE()",
-        "Vecino más cercano: q_near <- NEAREST_NEIGHBOR(q_rand, T)",
-        "Selección de entrada: u <- SELECT_INPUT_RECTA(q_rand, q_near)",
-        "Integración/Steer: q_new <- FINAL_DE_LA_RECTA(q_near, u, dt)",
-        "Actualización de árbol: T.ADD_VERTEX(q_new) & T.ADD_EDGE(q_near, q_new, u)"
+    static const char *const etapas[] = {
+        "Muestreando:   q_rand <- RANDOM_STATE()",
+        "Vecino:        q_near <- NEAREST_NEIGHBOR(q_rand, T)",
+        "entrada:       u   <- SELECT_INPUT_RECTA(q_rand, q_near)",
+        "Steer:         q_new <- FINAL_DE_LA_RECTA(q_near, u, dt)",
+        "Actualizacion: T.ADD_VERTEX(q_new) & T.ADD_EDGE(q_near, q_new, u)"
     };
 
     stateLabel_->setText(QStringLiteral("Estado: %1").arg(stateText));
-    phaseLabel_->setText(QString::fromUtf8(phases[conceptualPhase_]));
+    phaseLabel_->setText(QString::fromUtf8(etapas[conceptualPhase_]));
     stepsLabel_->setText(QStringLiteral("Pasos: %1").arg(executedSteps_));
 
     const int nodes = planner_ ? static_cast<int>(planner_->getTree().size()) : 0;
@@ -493,7 +510,7 @@ void RRTWidget::refreshOverlay()
         ? QStringLiteral("Nodos: %1 / %2").arg(nodes).arg(configuredMaxNodes_)
         : QStringLiteral("Nodos: %1").arg(nodes));
 
-    const qint64 elapsed = elapsedMilliseconds();
+    const qint64 elapsed = tiempoEnMiliseg();
     const qint64 minutes = elapsed / 60000;
     const qint64 seconds = (elapsed / 1000) % 60;
     const qint64 centiseconds = (elapsed / 10) % 100;
@@ -513,21 +530,21 @@ void RRTWidget::refreshOverlay()
     stepButton_->setEnabled(!finished && !presentingManualStep);
 }
 
-// amgl // visual // Coloca el HUD sobre el area OpenGL.
+// colocar el HUD sobre el area OpenGL
 void RRTWidget::positionOverlay()
 {
     if (!statusPanel_ || !telemetryPanel_
         || !executionPanel_ || !cameraPanel_)
         return;
 
-    // amgl // visual
+    // aa
     const int margin = 10;
     const int gap = 10;
-    const int availableWidth = std::max(260, width() - 2 * margin);
-    const int cornerWidth = std::max(125, (availableWidth - gap) / 2);
+    const int elWidthDisponible = std::max(260, width() - 2 * margin);
+    const int widhtDeEsquina = std::max(125, (elWidthDisponible - gap) / 2);
 
-    statusPanel_->setFixedWidth(cornerWidth);
-    telemetryPanel_->setMaximumWidth(cornerWidth);
+    statusPanel_->setFixedWidth(widhtDeEsquina);
+    telemetryPanel_->setMaximumWidth(widhtDeEsquina);
     statusPanel_->adjustSize();
     telemetryPanel_->adjustSize();
     executionPanel_->adjustSize();
@@ -546,15 +563,16 @@ void RRTWidget::positionOverlay()
     cameraPanel_->raise();
 }
 
-// amgl // visual // Inicia o reanuda la medicion de tiempo activo.
-void RRTWidget::startElapsedTime()
+//TIEMPOO
+// iniciar
+void RRTWidget::startTiempo()
 {
     if (!activeClock_.isValid())
         activeClock_.start();
 }
 
-// amgl // visual // Congela y acumula la medicion de tiempo activo.
-void RRTWidget::stopElapsedTime()
+// congelar y acuular
+void RRTWidget::stopTiempo()
 {
     if (activeClock_.isValid()) {
         accumulatedElapsedMs_ += activeClock_.elapsed();
@@ -562,21 +580,22 @@ void RRTWidget::stopElapsedTime()
     }
 }
 
-// amgl // visual // Devuelve el tiempo activo acumulado en milisegundos.
-qint64 RRTWidget::elapsedMilliseconds() const
+// tiempo activo acumulado
+// milisegundos
+qint64 RRTWidget::tiempoEnMiliseg() const
 {
     return accumulatedElapsedMs_
         + (activeClock_.isValid() ? activeClock_.elapsed() : 0);
 }
 
-// amgl // visual // Cambia el estado global mostrado por el HUD.
+// el paso en el que vamos
 void RRTWidget::setVisualState(VisualState state)
 {
     visualState_ = state;
     refreshOverlay();
 }
 
-// amgl // visual // Aplica la proyeccion respetando aspecto, centro y zoom.
+// proyectar
 void RRTWidget::applyProjection(int w, int h)
 {
     if (w <= 0 || h <= 0)
@@ -602,28 +621,28 @@ void RRTWidget::applyProjection(int w, int h)
     glMatrixMode(GL_MODELVIEW);
 }
 
-// amgl // visual // Dibuja una cuadricula de referencia en el escenario.
+// para guiarse con cuadricular
 void RRTWidget::drawGrid() const
 {
     glColor4f(0.45f, 0.52f, 0.62f, 0.16f);
     glLineWidth(1.0f);
     glBegin(GL_LINES);
-    for (int coordinate = 0; coordinate <= 500; coordinate += 50) {
-        glVertex2f(static_cast<float>(coordinate), 0.0f);
-        glVertex2f(static_cast<float>(coordinate), 500.0f);
-        glVertex2f(0.0f, static_cast<float>(coordinate));
-        glVertex2f(500.0f, static_cast<float>(coordinate));
+    for (int coord = 0; coord <= 500; coord += 50) {
+        glVertex2f(static_cast<float>(coord), 0.0f);
+        glVertex2f(static_cast<float>(coord), 500.0f);
+        glVertex2f(0.0f, static_cast<float>(coord));
+        glVertex2f(500.0f, static_cast<float>(coord));
     }
     glEnd();
 }
 
-// amgl // visual // Ajusta el zoom dentro de limites seguros.
+// ;limites de oom
 void RRTWidget::setZoomFactor(float factor)
 {
     const float previousZoom = zoomFactor_;
     zoomFactor_ = std::clamp(factor, 0.35f, 5.0f);
     if (zoomFactor_ != factor)
-        LOG_WARN("Zoom ajustado al limite permitido: solicitado=", factor,
+        LOG_WARN("Zoom ajustado al limite permitido: zoom=", factor,
                  ", aplicado=", zoomFactor_);
     LOG_DEBUG("Zoom actualizado: anterior=", previousZoom,
               ", actual=", zoomFactor_);
@@ -631,30 +650,30 @@ void RRTWidget::setZoomFactor(float factor)
     update();
 }
 
-// amgl // visual // Aumenta la escala visual del escenario.
+// aumenta la escala visual del escenario
 void RRTWidget::zoomIn()
 {
     setZoomFactor(zoomFactor_ * 1.2f);
 }
 
-// amgl // visual // Reduce la escala visual del escenario.
+// reduce scala visual del escenario
 void RRTWidget::zoomOut()
 {
     setZoomFactor(zoomFactor_ / 1.2f);
 }
 
-// amgl // visual // Restaura la escala visual predeterminada.
+// resetar
 void RRTWidget::resetZoom()
 {
-    // amgl // visual
+    // centrar tambine
     cameraCenterX_ = 250.0f;
     cameraCenterY_ = 250.0f;
     LOG_INFO("Camara restablecida al centro y zoom predeterminado");
     setZoomFactor(1.0f);
 }
 
-// amgl // visual // Desplaza el centro de la camara en coordenadas del mundo.
-void RRTWidget::panCamera(float dx, float dy)
+// mover el centro de la camara
+void RRTWidget::moverCamara(float dx, float dy)
 {
     cameraCenterX_ += dx;
     cameraCenterY_ += dy;
@@ -663,10 +682,9 @@ void RRTWidget::panCamera(float dx, float dy)
     update();
 }
 
-// amgl // visual // Avanza la descripcion conceptual de las etapas del RRT.
-void RRTWidget::advanceConceptualPhase()
+// avanza la etapa
+void RRTWidget::sigueinteFase()
 {
-    // amgl // visual
     if (visualState_ == VisualState::ManualStep) {
         if (conceptualPhase_ < 4) {
             ++conceptualPhase_;
@@ -675,9 +693,9 @@ void RRTWidget::advanceConceptualPhase()
         }
 
         phaseTimer_.stop();
-        startElapsedTime();
+        startTiempo();
         executeSimulationTick(true);
-        stopElapsedTime();
+        stopTiempo();
         phaseTimer_.setInterval(450);
         if (visualState_ != VisualState::GoalReached
             && visualState_ != VisualState::NodeLimitReached
@@ -695,7 +713,7 @@ void RRTWidget::advanceConceptualPhase()
     }
 }
 
-// amgl // visual // Comprueba la configuracion observable antes de ejecutar el planner.
+//comprueba la configuracion observable antes de ejecutar el planner.
 bool RRTWidget::hasValidConfiguration() const
 {
     if (!planner_ || planner_->getNumRobots() <= 0)
@@ -708,7 +726,15 @@ bool RRTWidget::hasValidConfiguration() const
 
 
 
-//Aqui se redibuja el arbol
+
+// -- // -- // -- // -- // -- // -- // -- // -- // -- // -- -- // -- // -- // -- // -- // -- // -- // -- // -- // -- //
+// //
+//                                                DIBUJAR ARBOLES
+// -- // -- // -- // -- // -- // -- // -- // -- // -- // -- -- // -- // -- // -- // -- // -- // -- // -- // -- // -- //
+// esto ya estaba solo hice ligeras modificaciones
+
+
+// Aqui se redibuja el arbol
 void RRTWidget::paintGL()
 {   
 
@@ -743,7 +769,7 @@ void RRTWidget::paintGL()
 
         // ---++++++++++++++++++++++++++++---
 
-        // --- 1) Árbol completo: líneas por robot ---
+        // --- 1) Arbol completo: lineas por robot ---
         if (!tree.empty()) {
             // Asumimos que el tamaño de q en cada nodo = numRobots
             const int R = static_cast<int>(tree.front().q.size());
@@ -804,7 +830,7 @@ void RRTWidget::paintGL()
                 }
                 glEnd();
 
-                // amgl // visual
+
                 if (drawFinalPath_) {
                     const float pathNodeRadius = 3.5f;
                     for (int idx : finalPath) {
@@ -828,7 +854,7 @@ void RRTWidget::paintGL()
            // out << "Numero de nodos en el path: " << (NNodesRRT+2) << Qt::endl;
         }
 
-        // --- 3) Metas (círculos rojos con contorno) ---
+        // --- 3) Metas (circulos rojos con contorno) ---
         for (const auto &g : goalQ) {
             const float r = goalRadius_;
             // relleno
@@ -850,7 +876,7 @@ void RRTWidget::paintGL()
             glEnd();
         }
 
-        // --- 4) Orígenes (círculos verdes con contorno) ---
+        // --- 4) origines (circulos verdes con contorno) ---
         for (const auto &o : originQ) {
             const float ro = originRadius_;
             // relleno
@@ -882,7 +908,7 @@ void RRTWidget::paintGL()
 
         // ---++++++++++++++++++++++++++++---
 
-        // --- 1) Árbol completo: líneas por robot ---
+        // --- 1) arbol completo: lineas por robot ---
         if (!tree.empty()) {
             // Asumimos que el tamaño de q en cada nodo = numRobots
             const int R = static_cast<int>(tree.front().q.size());
@@ -928,7 +954,7 @@ void RRTWidget::paintGL()
             }
         }
 
-        // --- 3) Metas (círculos rojos con contorno) ---
+        // --- 3) Metas (circulos rojos con contorno) ---
         for (const auto &g : goalQ) {
             const float r = goalRadius_;
             // relleno
@@ -950,7 +976,7 @@ void RRTWidget::paintGL()
             glEnd();
         }
 
-        // --- 4) Orígenes (círculos verdes con contorno) ---
+        // --- 4) Origenes (circulos verdes con contorno) ---
         for (const auto &o : originQ) {
             const float ro =2; //originRadius;
             // relleno
@@ -973,7 +999,7 @@ void RRTWidget::paintGL()
         }
     }
 
-    // amgl // visual
+    // amgl // llamar a las funciones ya implementadas
     statusPanel_->raise();
     telemetryPanel_->raise();
     executionPanel_->raise();
@@ -986,7 +1012,15 @@ void RRTWidget::EulerMult(float DeltaT)
     velocityIntegrator_.advance(DeltaT);
 }
 
-// amgl // visual // Alterna la ejecucion entre pausada y activa.
+
+// -- // -- // -- // -- // -- // -- // -- // -- // -- // -- -- // -- // -- // -- // -- // -- // -- // -- // -- // -- //
+// //
+//                       PARA PODER HACER PASO A PASO Y ALTENRAR ENTRE PAUSA Y SIMULACION
+// -- // -- // -- // -- // -- // -- // -- // -- // -- // -- -- // -- // -- // -- // -- // -- // -- // -- // -- // -- //
+// esto ya estaba solo hice ligeras modificaciones
+
+
+// alterna la ejecucion entre pausada y activa
 void RRTWidget::togglePause()
 {
     const bool finished = visualState_ == VisualState::GoalReached
@@ -1000,21 +1034,21 @@ void RRTWidget::togglePause()
     if (paused_) {
         timer_.stop();
         phaseTimer_.stop();
-        stopElapsedTime();
+        stopTiempo();
         setVisualState(VisualState::Paused);
-        LOG_INFO("Planificacion pausada: pasos=", executedSteps_,
+        LOG_INFO("pausaaaa: pasos=", executedSteps_,
                  ", nodos=", planner_->getTree().size());
     } else {
         timer_.start(timeGrowMs_);
         phaseTimer_.start();
-        startElapsedTime();
+        startTiempo();
         setVisualState(VisualState::Running);
-        LOG_INFO("Planificacion reanudada: periodo_ms=", timeGrowMs_);
+        LOG_INFO("reanudadoo: periodo_ms=", timeGrowMs_);
     }
     update();
 }
 
-// amgl // visual // Ejecuta un unico avance manteniendo la simulacion pausada.
+// un unico avance manteniendo la simulacion pausada
 void RRTWidget::stepOnce()
 {
     const bool finished = visualState_ == VisualState::GoalReached
@@ -1027,24 +1061,24 @@ void RRTWidget::stepOnce()
     paused_ = true;
     timer_.stop();
     phaseTimer_.stop();
-    stopElapsedTime();
+    stopTiempo();
     conceptualPhase_ = 0;
     setVisualState(VisualState::ManualStep);
     phaseTimer_.setInterval(180);
     phaseTimer_.start();
     update();
-    LOG_DEBUG("Paso manual solicitado: siguiente_paso=", executedSteps_ + 1);
+    LOG_DEBUG("paso manual     siguiente_paso=", executedSteps_ + 1);
 }
 
-// amgl // visual // Ejecuta una iteracion del planner y actualiza telemetria visual.
+// una iteracion del planner y actualiza
 bool RRTWidget::executePlannerIteration()
 {
     if (!hasValidConfiguration()) {
         timer_.stop();
         phaseTimer_.stop();
-        stopElapsedTime();
+        stopTiempo();
         setVisualState(VisualState::InvalidConfiguration);
-        LOG_ERROR("No se puede ejecutar el planner: configuracion observable invalida");
+        LOG_ERROR("aaaaaa NO se puede ejecutar el planner: configuracion observable invalida");
         return false;
     }
 
@@ -1052,9 +1086,9 @@ bool RRTWidget::executePlannerIteration()
         && static_cast<int>(planner_->getTree().size()) >= configuredMaxNodes_) {
         timer_.stop();
         phaseTimer_.stop();
-        stopElapsedTime();
+        stopTiempo();
         setVisualState(VisualState::NodeLimitReached);
-        LOG_ERROR("Limite de nodos alcanzado sin ruta: nodos=",
+        LOG_ERROR("LIMITE DE NODOS ALCANZADO        nodos=",
                   planner_->getTree().size(), ", limite=", configuredMaxNodes_);
         return false;
     }
@@ -1066,27 +1100,27 @@ bool RRTWidget::executePlannerIteration()
     } catch (const std::exception& ex) {
         timer_.stop();
         phaseTimer_.stop();
-        stopElapsedTime();
+        stopTiempo();
         setVisualState(VisualState::PlanningFailed);
-        LOG_ERROR("planificacion interrumpida: ", ex.what());
+        LOG_ERROR("planificacion interrumpida ", ex.what());
         return false;
     }
 
     if (reachedGoal) {
         timer_.stop();
         phaseTimer_.stop();
-        stopElapsedTime();
+        stopTiempo();
         setVisualState(VisualState::GoalReached);
-        LOG_SUCCESS("Meta alcanzada por el widget: pasos=", executedSteps_,
+        LOG_SUCCESS("meta alcanzada   pasos=", executedSteps_,
                     ", nodos=", planner_->getTree().size());
         return true;
     }
 
-    // Un intento rechazado por colision puede no insertar un nodo y no es un error.
-    if (planner_->isDone()) {
+    // intento rechazado por colision // aveces no inserta un nodo // notar que  no es un error
+    if( planner_->isDone() ){
         timer_.stop();
         phaseTimer_.stop();
-        stopElapsedTime();
+        stopTiempo();
         const bool hitNodeLimit = configuredMaxNodes_ > 0
             && static_cast<int>(planner_->getTree().size()) >= configuredMaxNodes_;
         setVisualState(hitNodeLimit
@@ -1102,7 +1136,7 @@ bool RRTWidget::executePlannerIteration()
     return false;
 }
 
-// amgl // visual // Ejecuta un ciclo de simulacion compartido por timer y paso manual.
+// ciclo de simulacion compartido por timer y paso manual
 void RRTWidget::executeSimulationTick(bool manualStep)
 {
     setVisualState(manualStep ? VisualState::ManualStep : VisualState::Running);
@@ -1133,7 +1167,8 @@ void RRTWidget::executeSimulationTick(bool manualStep)
     update();
 }
 
-//Esta función se llama cada 30 ms en RRTWidget por default, pero toma el valor segun la función SetTimeGrow
+// wsta funcion se llama cada 30 ms en RRTWidget por default
+// pero toma el valor segun la función SetTimeGrow
 void RRTWidget::growTree()
 {
     // amgl // visual
@@ -1142,38 +1177,38 @@ void RRTWidget::growTree()
     executeSimulationTick(false);
 }
 
-// amgl // visual // Detiene la planificacion y congela su telemetria.
+// dsetiene la planificacion y pausa su analisis
 void RRTWidget::StopPlanning()
 {
     timer_.stop();
     phaseTimer_.stop();
-    stopElapsedTime();
+    stopTiempo();
     paused_ = true;
     setVisualState(VisualState::Paused);
     update();
-    LOG_INFO("Planificacion detenida: pasos=", executedSteps_,
+    LOG_INFO("detenida: pasos=", executedSteps_,
              ", nodos=", planner_ ? planner_->getTree().size() : 0);
 }
 
-// amgl // visual // Configura los obstaculos sin dejar un estado visual parcial.
+// configura los obstaculos sin dejar un estado visual parcial
 void RRTWidget::SetObstacles(const std::vector<PolygonObstacle>& obstacles)
 {
-    LOG_INFO("Configurando obstaculos en el widget: total=", obstacles.size());
+    LOG_INFO("configurando obstaculos en el widget: total=", obstacles.size());
     timer_.stop();
     phaseTimer_.stop();
-    stopElapsedTime();
+    stopTiempo();
 
-    // Primero configurar PQP. Si falla, no cambiar la imagen.
+    // primero configurar PQP // Si falla, no cambiar la imagen
     planner_->setObstacles(obstacles);
     obstacles_ = obstacles;
 
     velocityIntegrator_.setState(planner_->getOrigin());
     setVisualState(VisualState::Preparing);
     update();
-    LOG_SUCCESS("Obstaculos configurados en el widget: total=", obstacles_.size());
+    LOG_SUCCESS("obstaculos configurados en el widget: total=", obstacles_.size());
 }
 
-// amgl // visual // Dibuja el relleno y contorno de los obstaculos del escenario.
+// dibuja el relleno y contorno de los obstaculos del escenario
 void RRTWidget::drawObstacles()
 {
     glColor4f(0.48f, 0.52f, 0.58f, 0.58f);

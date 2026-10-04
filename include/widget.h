@@ -27,11 +27,11 @@ public:
     //QPointF ReadGoalTreePos() const {return QPointF(goalX, goalY, goalTH);}
     int ReadTimeGrow() const{return timeGrowMs_;}
 
-    // amgl // configurar los obstaculos sin dejar un estado visual parcial.
+    // amgl // obstauclos
     void SetObstacles(const std::vector<PolygonObstacle>& obstacles);
 
 
-    // amgl // visual // Detiene la planificacion y congela su telemetria.
+    // amgl // visual // Detiene la planificacion y congela su analisis
     void StopPlanning();
 
     bool ActiveEuler=false;
@@ -52,25 +52,31 @@ protected:
     void paintGL() override;//se dibuja todo (arbol, meta origen y camino final)
     void resizeGL(int w, int h) override;//ajuste de vista al cambiar el tamaño de ventana
 
-    // amgl // visual
-    // ajusta el tam d el panel cuando cambia el tamano del widget
+    // amgl // INTERACTUAR
+
+    // reajustas
     void resizeEvent(QResizeEvent *event) override;
-    // zoom mediante la rueda del raton.
+
+    // zoom mediante la rueda del raton
     void wheelEvent(QWheelEvent *event) override;
-    // atajos de teclado para pausa, paso y zoom.
+
+    // atajos de teclado para pausa, paso y zoom
     void keyPressEvent(QKeyEvent *event) override;
+
     // inicia el desplazamiento de camara mediante arrastre
     void mousePressEvent(QMouseEvent *event) override;
+
     // acumula el desplazamiento de camara durante el arrastre
     void mouseMoveEvent(QMouseEvent *event) override;
+
     // finaliza el desplazamiento de camara mediante arrastre
     void mouseReleaseEvent(QMouseEvent *event) override;
 
 private slots:
     void growTree();// se llama cada 30ms para controlar el crecimiento del arbol RRT
 
-    // amgl // visual
-    // cambiar entre pausada y activa.
+    // TIEMPO Y ZOOM
+    // cambiar entre pausada y activa
     void togglePause();
     // ejecuta un unico paso // pone tambien la simulacion pausada
     void stepOnce();
@@ -81,10 +87,10 @@ private slots:
     // resetear escala
     void resetZoom();
     // aqui actualizamos las descricpiones de cada paso del RTT
-    void advanceConceptualPhase();
+    void sigueinteFase();
 
 private:
-    // amgl // visual
+    // el estado visual
     enum class VisualState {
         Preparing,
         Running,
@@ -96,33 +102,35 @@ private:
         InvalidConfiguration
     };
 
-    // amgl // visual // Construye el panel HUD y conecta sus controles.
+    // amgl // para interface
+
+    // construye el panel HUD y conecta sus controles
     void createOverlayPanel();
-    // amgl // visual // Sincroniza textos, contadores y botones del HUD.
+    // sincroniza textos, contadores y botones del HUD
     void refreshOverlay();
-    // amgl // visual // Coloca el HUD sobre el area OpenGL.
+    // coloca el HUD sobre el area OpenGL
     void positionOverlay();
-    // amgl // visual // Ejecuta un ciclo de simulacion compartido por timer y paso manual.
+    //  un ciclo de simulacion compartido por timer y paso manual
     void executeSimulationTick(bool manualStep);
-    // amgl // visual // Ejecuta una iteracion del planner y actualiza telemetria visual.
+    // una iteracion del planner y actualiza telemetria visual
     bool executePlannerIteration();
-    // amgl // visual // Inicia o reanuda la medicion de tiempo activo.
-    void startElapsedTime();
-    // amgl // visual // Congela y acumula la medicion de tiempo activo.
-    void stopElapsedTime();
-    // amgl // visual // Devuelve el tiempo activo acumulado en milisegundos.
-    qint64 elapsedMilliseconds() const;
-    // amgl // visual // Cambia el estado global mostrado por el HUD.
+    //  reanuda la medicion de tiempo activo
+    void startTiempo();
+    //  congela tiempo activo
+    void stopTiempo();
+    //  tiempo acum en milisegundos
+    qint64 tiempoEnMiliseg() const;
+    //  estado global mostrado por el HUD
     void setVisualState(VisualState state);
-    // amgl // visual // Aplica la proyeccion respetando aspecto, centro y zoom.
+    // a proyeccion respetando aspecto, centro y zoom
     void applyProjection(int w, int h);
-    // amgl // visual // Dibuja una cuadricula de referencia en el escenario.
+    // cuadricula de referencia en el escenario
     void drawGrid() const;
-    // amgl // visual // Ajusta el zoom dentro de limites seguros.
+    // s zoom dentro de limites seguros
     void setZoomFactor(float factor);
-    // amgl // visual // Desplaza el centro de la camara en coordenadas del mundo.
-    void panCamera(float dx, float dy);
-    // amgl // visual // Comprueba la configuracion observable antes de ejecutar el planner.
+    //  movers el centro de la camara en coordenadas del mundo
+    void moverCamara(float dx, float dy);
+    //  checar configuracion observable antes de ejecutar el planner
     bool hasValidConfiguration() const;
 
     //AMGL// el estado del RTT es guardado aparte para separar  algoritmo de visualizacion
@@ -142,7 +150,7 @@ private:
     bool drawAllNodes_=true;
     bool drawFinalPath_=true;
 
-    // amgl // visual
+    // amgl // visual // elementos qt
     QFrame *statusPanel_ = nullptr;
     QFrame *telemetryPanel_ = nullptr;
     QFrame *executionPanel_ = nullptr;
@@ -156,7 +164,7 @@ private:
     QPushButton *pauseButton_ = nullptr;
     QPushButton *stepButton_ = nullptr;
 
-    // amgl // visual
+    // amgl // visual // infor uitl
     VisualState visualState_ = VisualState::Preparing;
     int conceptualPhase_ = 0;
     quint64 executedSteps_ = 0;
@@ -169,6 +177,8 @@ private:
     QPoint lastPanPosition_;
     QElapsedTimer activeClock_;
     qint64 accumulatedElapsedMs_ = 0;
+
+    // param
 
     int timeGrowMs_=30; //milisegundos
     float goalRadius_ = 5.0f;//radio de la meta
