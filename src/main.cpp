@@ -20,9 +20,6 @@ int main(int argc, char *argv[]) {
     LOG_INFO( "El Working Directory actual es:", s_actualpath);
 
     // la aplicaicon
-
-
-
     RRTWindow w;//crea ventana principal (entorno visual del RRT)
     w.show();//visualizar la ventana
     LOG_SUCCESS("Aplicacion RRT lista; iniciando ciclo de eventos");

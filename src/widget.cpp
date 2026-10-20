@@ -739,7 +739,9 @@ void RRTWidget::paintGL()
 {   
 
     // amgl // visual
-    applyProjection(width(), height());
+    const qreal devicePixelRatio = this->devicePixelRatioF();
+    applyProjection(qRound(width() * devicePixelRatio),
+                    qRound(height() * devicePixelRatio));
     glClear(GL_COLOR_BUFFER_BIT);
     glLoadIdentity();
     drawGrid();
