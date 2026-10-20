@@ -20,6 +20,7 @@ public:
     void setStepSize(float step) override;
     void setMaxNodes(int maxNodes) override;
     void setGoalTolerance(float distance) override;
+    float getGoalTolerance() const override;
 
     void reset() override;
     bool step() override;
@@ -51,10 +52,12 @@ private:
     // limite de intentos de muestras
     std::uint64_t attempts_ = 0;
     std::uint64_t maxAttempts_ = 200000;
+    float goalBias_ = 0.1f; // AMGL // direccion preferencial a la meta: 10% de los intentos
 
     bool isConfigurationValid(const std::vector<Config>& q) const;
     bool isEdgeValid(const std::vector<Config>& from,
                      const std::vector<Config>& to) const;
+    bool isWithinGoalTolerance(const std::vector<Config>& q) const;
 
     // el arbol
     std::vector<PlanNode> tree_;//conjunto de nodos actuales (Cada nodo guarda (x,y) y parent)
@@ -62,10 +65,8 @@ private:
     std::vector<Config> goalQ_;//meta a llegar
     std::vector<Config> originQ_; //origen
 
-    float goalRadius_ = 5.0f;
-    float originRadius_ = 5.0f;
     float stepSize_ = 8.0f;//15.0f tamaño de paso
-    float distToGoal_ = 50.0f;
+    float goalMargin_ = 50.0f;
     float diamRobot_ = 5.0f;
 
     int maxNodes_ = 2000;//maximo de nodos para detener la expansión del arbol

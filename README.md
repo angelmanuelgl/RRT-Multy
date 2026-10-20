@@ -8,7 +8,6 @@ Aplicación en C++17 y Qt 6 para visualizar un árbol RRT para múltiples robots
 
 
 ### RESUMEN principal
-s
 
 * **`main.cpp`**: crea `QApplication` y la ventana principal `RRTWindow`.
 * **`RRTWindow` (`window.h` / `window.cpp`)**: construye la ventana, instala `RRTWidget` como widget central y solicita la configuración del escenario de demostración
@@ -58,6 +57,16 @@ data/
 qt_rrt.pro
 ```
 
+
+# Como usarlo?
+Mejora de convergencia del RRT: Se el contador de intentos,  aplicar el límite de 200,000 intentos.
+Ahora se contabilizan todas las expansiones,  incluidas las rechazadas por colisión. 
+
+También se agregó un sesgo de meta del 10 %: en esos intentos se toma como muestra la configuración final conjunta de los robots, guiando el crecimiento del árbol hacia las metas. 
+
+eset() reinicia el contador y el estado de validación para cada nueva planificación.
+
+
 # Como usarlo?
 
 ## Escenario de prueba
@@ -87,6 +96,13 @@ El formato con el que se lee el input ess
   * **Siguientes $V$ líneas:** `x y` (coordenadas de cada vértice).
 
 
+
+
+## Elegir escenario y obstaculos
+
+El ejemplo 2 usa `data/escenario2.in` y `data/obstaculos2.in`; `src/main.cpp` apunta actualmente a esa pareja. Para cambiar de ejemplo, edita `scenarioFile` y `obstaclesFile` en `main()`. El ejemplo 1 sigue disponible como `data/escenario1.in` y `data/obstaculos1.in`.
+
+Las rutas relativas se buscan desde el directorio actual, el directorio del ejecutable y la carpeta del proyecto compilada en `qt_rrt.pro`.
 
 
 ## Compilacion
@@ -187,4 +203,3 @@ lo entrega a `VelocityIntegrator` y después coordina sus avances desde el tempo
 - Se trasladaron las velocidades y las configuraciones `Next`, `Curr` y `Prev` al integrador
 - `computeVelocities()`, `VelocitiesRobots()` y `EulerMult()` actúan ahora como fachadas delgadas hacia `VelocityIntegrator`
 x
-

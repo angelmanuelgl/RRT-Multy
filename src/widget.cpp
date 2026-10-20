@@ -1,9 +1,11 @@
 #include "widget.h"
 #include "RRTPlanner.h"
+#include "auxDraw.h"
 
 #include "logger.h"
 
 #include <QOpenGLFunctions>
+#include <QComboBox>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -118,7 +120,7 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
     //Tomando coordenadas de robots en la configuración origen
     for(int i=0;i<Nrobots; i++)
     {
-        origin[i]={x[i],y[i],th[i]};
+        origin[i]={x[i],y[i],th[i],radio};
     }
 
     originRadius_=radio; //radio del robot
@@ -126,6 +128,17 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
     velocityIntegrator_.setState(origin);
     planner_->setNumRobots(Nrobots);
     planner_->setStart(origin, radio);
+
+    // AMGL // seleccionar resaltado: actualizar opciones para el escenario cargado.
+    if (highlightRobotCombo_) {
+        highlightRobotCombo_->clear();
+        highlightRobotCombo_->addItem(QStringLiteral("Todos"), -1);
+        for (int robot = 0; robot < Nrobots; ++robot)
+            highlightRobotCombo_->addItem(
+                QStringLiteral("Robot %1").arg(robot + 1), robot);
+        highlightRobotCombo_->setCurrentIndex(0);
+    }
+    highlightedRobot_ = -1;
 
     // amgl // visual
     executedSteps_ = 0;
@@ -166,10 +179,8 @@ void RRTWidget::GoalTree(std::vector<float>& x, std::vector<float>& y,
     std::vector<Config> goal(Nrobots);
     for(int i=0;i<Nrobots; i++)
     {
-        goal[i]={x[i],y[i],th[i]};
+        goal[i]={x[i],y[i],th[i],radio};
     }
-    goalRadius_=radio;
-
     planner_->setNumRobots(Nrobots);
     planner_->setGoal(goal, radio);
 
@@ -446,6 +457,11 @@ void RRTWidget::createOverlayPanel()
     executionLayout->addWidget(pauseButton_);
     executionLayout->addWidget(stepButton_);
 
+    // AMGL // seleccionar resaltado: elegir robot desde la interfaz.
+    highlightRobotCombo_ = new QComboBox(executionPanel_);
+    highlightRobotCombo_->addItem(QStringLiteral("Todos"), -1);
+    executionLayout->addWidget(highlightRobotCombo_);
+
     auto *cameraLayout = new QHBoxLayout(cameraPanel_);
     cameraLayout->setContentsMargins(8, 6, 8, 6);
     cameraLayout->setSpacing(5);
@@ -462,6 +478,12 @@ void RRTWidget::createOverlayPanel()
 
     connect(pauseButton_, &QPushButton::clicked, this, &RRTWidget::togglePause);
     connect(stepButton_, &QPushButton::clicked, this, &RRTWidget::stepOnce);
+    connect(highlightRobotCombo_, qOverload<int>(&QComboBox::currentIndexChanged),
+            this, [this](int index) {
+                // AMGL // seleccionar resaltado: actualizar el robot visible en primer plano.
+                highlightedRobot_ = highlightRobotCombo_->itemData(index).toInt();
+                update();
+            });
     connect(zoomOutButton, &QPushButton::clicked, this, &RRTWidget::zoomOut);
     connect(zoomInButton, &QPushButton::clicked, this, &RRTWidget::zoomIn);
     connect(zoomResetButton, &QPushButton::clicked, this, &RRTWidget::resetZoom);
@@ -621,21 +643,6 @@ void RRTWidget::applyProjection(int w, int h)
     glMatrixMode(GL_MODELVIEW);
 }
 
-// para guiarse con cuadricular
-void RRTWidget::drawGrid() const
-{
-    glColor4f(0.45f, 0.52f, 0.62f, 0.16f);
-    glLineWidth(1.0f);
-    glBegin(GL_LINES);
-    for (int coord = 0; coord <= 500; coord += 50) {
-        glVertex2f(static_cast<float>(coord), 0.0f);
-        glVertex2f(static_cast<float>(coord), 500.0f);
-        glVertex2f(0.0f, static_cast<float>(coord));
-        glVertex2f(500.0f, static_cast<float>(coord));
-    }
-    glEnd();
-}
-
 // ;limites de oom
 void RRTWidget::setZoomFactor(float factor)
 {
@@ -744,262 +751,27 @@ void RRTWidget::paintGL()
                     qRound(height() * devicePixelRatio));
     glClear(GL_COLOR_BUFFER_BIT);
     glLoadIdentity();
-    drawGrid();
-    drawObstacles(); // AMGL // obstaculos bajo el arbol y los robots
+    auxDraw::drawGrid();
+    auxDraw::drawObstacles(obstacles_); // obstaculos bajo el arbol y los robots
     refreshOverlay();
 
-    // ---+++ Funcion que determina los colores por robot +++---
-    auto colorForRobot = [](int r) {
-        // Paleta simple pero estable (0..N-1)
-        float cr = ((r * 97) % 255) / 255.0f;
-        float cg = ((r * 150) % 255) / 255.0f;
-        float cb = ((r * 19) % 255) / 255.0f;
-        // Evitar colores muy oscuros
-        const float minc = 0.2f;
-        cr = std::max(cr, minc);
-        cg = std::max(cg, minc);
-        cb = std::max(cb, minc);
-        return std::tuple<float,float,float>(cr,cg,cb);
-    };
+    const auto& tree = planner_->getTree();
+    const auto& goalQ = planner_->getGoal();
+    const auto& originQ = planner_->getOrigin();
 
-    if(!ActiveEuler)
-    {
-        const auto &tree = planner_->getTree();
-        const auto &finalPath = planner_->getPath();
-        const auto &goalQ = planner_->getGoal();
-        const auto &originQ = planner_->getOrigin();
-
-        // ---++++++++++++++++++++++++++++---
-
-        // --- 1) Arbol completo: lineas por robot ---
-        if (!tree.empty()) {
-            // Asumimos que el tamaño de q en cada nodo = numRobots
-            const int R = static_cast<int>(tree.front().q.size());
-            for (int r = 0; r < R; ++r)// para cada robot en el nodo
-            {
-                auto [cr, cg, cb] = colorForRobot(r);//asignamos color al robot de cada nodo
-                glColor4f(cr, cg, cb, 0.48f); // amgl // visual
-                glLineWidth(1.0f);
-                glBegin(GL_LINES);
-                for (const auto& node : tree) {
-                    if (node.parent != -1) {
-                        const auto &q_child  = node.q;
-                        const auto &q_parent = tree[node.parent].q;
-                        if (r < (int)q_child.size() && r < (int)q_parent.size()) {
-                            glVertex2f(q_child[r].x,  q_child[r].y);
-                            glVertex2f(q_parent[r].x, q_parent[r].y);
-
-
-                        }
-                    }
-                }
-                glEnd();
-
-                // amgl // visual
-                if (drawAllNodes_) {
-                    const float rn = 2.5f;
-                    for (const auto &node : tree) {
-                        if (r >= static_cast<int>(node.q.size()))
-                            continue;
-                        glBegin(GL_LINE_LOOP);
-                        for (int i = 0; i < 24; ++i) {
-                            const float angle = i * 2.0f * M_PI / 24.0f;
-                            glVertex2f(node.q[r].x + rn * std::cos(angle),
-                                       node.q[r].y + rn * std::sin(angle));
-                        }
-                        glEnd();
-                    }
-                }
-            }
-        }
-
-
-
-        // --- 2) Caminos finales por robot (si existe finalPath) ---
-        if (!finalPath.empty()) {
-            // robots presentes en el primer nodo del camino
-            const int R = static_cast<int>(tree[finalPath.front()].q.size());
-            for (int r = 0; r < R; ++r) {
-                auto [cr, cg, cb] = colorForRobot(r);
-                glColor4f(cr, cg, cb, 0.95f); // amgl // visual
-                glLineWidth(5.0f); // amgl // visual
-                glBegin(GL_LINE_STRIP);
-                for (int idx : finalPath) {
-                    const auto &q = tree[idx].q;
-                    if (r < (int)q.size()) {
-                        glVertex2f(q[r].x, q[r].y);
-                    }
-                }
-                glEnd();
-
-
-                if (drawFinalPath_) {
-                    const float pathNodeRadius = 3.5f;
-                    for (int idx : finalPath) {
-                        const auto &q = tree[idx].q;
-                        if (r >= static_cast<int>(q.size()))
-                            continue;
-                        glBegin(GL_LINE_LOOP);
-                        for (int i = 0; i < 24; ++i) {
-                            const float angle = i * 2.0f * M_PI / 24.0f;
-                            glVertex2f(q[r].x + pathNodeRadius * std::cos(angle),
-                                       q[r].y + pathNodeRadius * std::sin(angle));
-                        }
-                        glEnd();
-                    }
-                }
-            }
-            glLineWidth(1.0f);
-
-           // QTextStream out(stdout);
-           // out << "Numero de nodos en el path: " << NNodesPath << Qt::endl;
-           // out << "Numero de nodos en el path: " << (NNodesRRT+2) << Qt::endl;
-        }
-
-        // --- 3) Metas (circulos rojos con contorno) ---
-        for (const auto &g : goalQ) {
-            const float r = goalRadius_;
-            // relleno
-            glColor4f(1.0f, 0.0f, 0.0f, 0.85f);
-            glBegin(GL_TRIANGLE_FAN);
-            glVertex2f(g.x, g.y);
-            for (int i = 0; i <= 36; ++i) {
-                float ang = i * 2.0f * M_PI / 36.0f;
-                glVertex2f(g.x + r * std::cos(ang), g.y + r * std::sin(ang));
-            }
-            glEnd();
-            // contorno
-            glColor3f(0.6f, 0.0f, 0.0f);
-            glBegin(GL_LINE_LOOP);
-            for (int i = 0; i < 36; ++i) {
-                float ang = i * 2.0f * M_PI / 36.0f;
-                glVertex2f(g.x + r * std::cos(ang), g.y + r * std::sin(ang));
-            }
-            glEnd();
-        }
-
-        // --- 4) origines (circulos verdes con contorno) ---
-        for (const auto &o : originQ) {
-            const float ro = originRadius_;
-            // relleno
-            glColor4f(0.0f, 1.0f, 0.0f, 0.85f);
-            glBegin(GL_TRIANGLE_FAN);
-            glVertex2f(o.x, o.y);
-            for (int i = 0; i <= 36; ++i) {
-                float ang = i * 2.0f * M_PI / 36.0f;
-                glVertex2f(o.x + ro * std::cos(ang), o.y + ro * std::sin(ang));
-            }
-            glEnd();
-            // contorno
-            glColor3f(0.0f, 0.45f, 0.0f);
-            glBegin(GL_LINE_LOOP);
-            for (int i = 0; i < 36; ++i) {
-                float ang = i * 2.0f * M_PI / 36.0f;
-                glVertex2f(o.x + ro * std::cos(ang), o.y + ro * std::sin(ang));
-            }
-            glEnd();
-        }
+    // aqui se dibuja todo
+    if (!ActiveEuler) {
+        auxDraw::drawTree(tree, drawAllNodes_, 0.48f, highlightedRobot_);
+        auxDraw::drawPath(tree, planner_->getPath(), drawFinalPath_,
+                          highlightedRobot_);
+        auxDraw::drawOriginRegions(originQ, originRadius_);
+    } else {
+        auxDraw::drawTree(tree, false, 0.45f, highlightedRobot_);
+        auxDraw::drawEulerSegment(velocityIntegrator_.getPrevious(),
+                                  velocityIntegrator_.getNext());
+        auxDraw::drawOriginRegions(originQ, 2.0f);
     }
-    else
-    {
-        const auto &tree = planner_->getTree();
-        const auto &goalQ = planner_->getGoal();
-        const auto &originQ = planner_->getOrigin();
-        const auto &Next = velocityIntegrator_.getNext();
-        const auto &Prev = velocityIntegrator_.getPrevious();
-
-        // ---++++++++++++++++++++++++++++---
-
-        // --- 1) arbol completo: lineas por robot ---
-        if (!tree.empty()) {
-            // Asumimos que el tamaño de q en cada nodo = numRobots
-            const int R = static_cast<int>(tree.front().q.size());
-            for (int r = 0; r < R; ++r)// para cada robot en el nodo
-            {
-                auto [cr, cg, cb] = colorForRobot(r);//asignamos color al robot de cada nodo
-                glColor4f(cr, cg, cb, 0.45f); // amgl // visual
-                glLineWidth(1.0f);
-                glBegin(GL_LINES);
-                for (const auto& node : tree) {
-                    if (node.parent != -1) {
-                        const auto &q_child  = node.q;
-                        const auto &q_parent = tree[node.parent].q;
-                        if (r < static_cast<int>(q_child.size())
-                            && r < static_cast<int>(q_parent.size())) {
-                            glVertex2f(q_child[r].x, q_child[r].y);
-                            glVertex2f(q_parent[r].x, q_parent[r].y);
-                        }
-                    }
-                }
-                glEnd();
-
-                // amgl // visual
-                if (r < static_cast<int>(Prev.size())
-                    && r < static_cast<int>(Next.size())) {
-                    glColor4f(cr, cg, cb, 1.0f);
-                    glLineWidth(4.0f);
-                    glBegin(GL_LINES);
-                    glVertex2f(Prev[r].x, Prev[r].y);
-                    glVertex2f(Next[r].x, Next[r].y);
-                    glEnd();
-
-                    const float movingNodeRadius = 4.0f;
-                    glBegin(GL_LINE_LOOP);
-                    for (int i = 0; i < 24; ++i) {
-                        const float angle = i * 2.0f * M_PI / 24.0f;
-                        glVertex2f(Next[r].x + movingNodeRadius * std::cos(angle),
-                                   Next[r].y + movingNodeRadius * std::sin(angle));
-                    }
-                    glEnd();
-                    glLineWidth(1.0f);
-                }
-            }
-        }
-
-        // --- 3) Metas (circulos rojos con contorno) ---
-        for (const auto &g : goalQ) {
-            const float r = goalRadius_;
-            // relleno
-            glColor4f(1.0f, 0.0f, 0.0f, 0.85f);
-            glBegin(GL_TRIANGLE_FAN);
-            glVertex2f(g.x, g.y);
-            for (int i = 0; i <= 36; ++i) {
-                float ang = i * 2.0f * M_PI / 36.0f;
-                glVertex2f(g.x + r * std::cos(ang), g.y + r * std::sin(ang));
-            }
-            glEnd();
-            // contorno
-            glColor3f(0.6f, 0.0f, 0.0f);
-            glBegin(GL_LINE_LOOP);
-            for (int i = 0; i < 36; ++i) {
-                float ang = i * 2.0f * M_PI / 36.0f;
-                glVertex2f(g.x + r * std::cos(ang), g.y + r * std::sin(ang));
-            }
-            glEnd();
-        }
-
-        // --- 4) Origenes (circulos verdes con contorno) ---
-        for (const auto &o : originQ) {
-            const float ro =2; //originRadius;
-            // relleno
-            glColor4f(0.0f, 1.0f, 0.0f, 0.85f);
-            glBegin(GL_TRIANGLE_FAN);
-            glVertex2f(o.x, o.y);
-            for (int i = 0; i <= 36; ++i) {
-                float ang = i * 2.0f * M_PI / 36.0f;
-                glVertex2f(o.x + ro * std::cos(ang), o.y + ro * std::sin(ang));
-            }
-            glEnd();
-            // contorno
-            glColor3f(0.0f, 0.45f, 0.0f);
-            glBegin(GL_LINE_LOOP);
-            for (int i = 0; i < 36; ++i) {
-                float ang = i * 2.0f * M_PI / 36.0f;
-                glVertex2f(o.x + ro * std::cos(ang), o.y + ro * std::sin(ang));
-            }
-            glEnd();
-        }
-    }
+     auxDraw::drawGoalRegions(goalQ, planner_->getGoalTolerance());
 
     // amgl // llamar a las funciones ya implementadas
     statusPanel_->raise();
@@ -1208,28 +980,4 @@ void RRTWidget::SetObstacles(const std::vector<PolygonObstacle>& obstacles)
     setVisualState(VisualState::Preparing);
     update();
     LOG_SUCCESS("obstaculos configurados en el widget: total=", obstacles_.size());
-}
-
-// dibuja el relleno y contorno de los obstaculos del escenario
-void RRTWidget::drawObstacles()
-{
-    glColor4f(0.48f, 0.52f, 0.58f, 0.58f);
-    glBegin(GL_TRIANGLES);
-    for (const auto& obstacle : obstacles_) {
-        for (const auto& triangle : obstacle.triangles) {
-            for (const auto& point : triangle)
-                glVertex2d(point.x, point.y);
-        }
-    }
-    glEnd();
-
-    glColor4f(0.16f, 0.19f, 0.24f, 0.90f);
-    glLineWidth(2.0f);
-    for (const auto& obstacle : obstacles_) {
-        glBegin(GL_LINE_LOOP);
-        for (const auto& point : obstacle.vertices)
-            glVertex2d(point.x, point.y);
-        glEnd();
-    }
-    glLineWidth(1.0f);
 }

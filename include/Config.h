@@ -8,6 +8,7 @@
 //mediante esta estructura se define un nodo en el arbol del RRT
 struct Config {
     float x, y, theta;//Pose del robot
+    float radius = 5.0f; // Huella del robot; se conserva en sus distintas poses.
 };
 
 struct Velocities {

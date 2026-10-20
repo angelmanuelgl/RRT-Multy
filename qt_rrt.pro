@@ -26,6 +26,16 @@ DISTFILES += \
     Markdown.md \
     data/escenario1.in \
     data/obstaculos1.in \
+    data/escenario2.in \
+    data/obstaculos2.in \
+    data/escenario3.in \
+    data/obstaculos3.in \
+    data/escenario5.in \
+    data/obstaculos5.in \
+    data/escenario6.in \
+    data/obstaculos6.in \
+    data/escenario7.in \
+    data/obstaculos7.in
 
 
 INCLUDEPATH += include
@@ -38,6 +48,7 @@ SOURCES += \
     src/window.cpp \
     src/RRTPlanner.cpp \
     src/VelocityIntegrator.cpp \
+    src/auxDraw.cpp \
 
 
 
@@ -52,4 +63,5 @@ HEADERS += \
     include/window.h \
     include/Config.h \
     include/RRTPlanner.h \
-    include/VelocityIntegrator.h
+    include/VelocityIntegrator.h \
+    include/auxDraw.h

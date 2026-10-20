@@ -8,6 +8,7 @@
 #include "Obstacle.h"
 #include <memory>
 
+class QComboBox;
 class QFrame;
 class QLabel;
 class QKeyEvent;
@@ -124,8 +125,6 @@ private:
     void setVisualState(VisualState state);
     // a proyeccion respetando aspecto, centro y zoom
     void applyProjection(int w, int h);
-    // cuadricula de referencia en el escenario
-    void drawGrid() const;
     // s zoom dentro de limites seguros
     void setZoomFactor(float factor);
     //  movers el centro de la camara en coordenadas del mundo
@@ -142,8 +141,6 @@ private:
 
     // obstaculos
     std::vector<PolygonObstacle> obstacles_;
-    // dibuja todos los obstaculos
-    void drawObstacles();
 
     QTimer timer_; //temporizador que activa el arbol
     QTimer phaseTimer_; // amgl // visual
@@ -163,6 +160,8 @@ private:
     QLabel *zoomLabel_ = nullptr;
     QPushButton *pauseButton_ = nullptr;
     QPushButton *stepButton_ = nullptr;
+    QComboBox *highlightRobotCombo_ = nullptr; // AMGL // seleccionar resaltado
+    int highlightedRobot_ = -1; // -1 muestra todos los robots
 
     // amgl // visual // infor uitl
     VisualState visualState_ = VisualState::Preparing;
@@ -181,6 +180,5 @@ private:
     // param
 
     int timeGrowMs_=30; //milisegundos
-    float goalRadius_ = 5.0f;//radio de la meta
     float originRadius_ = 5.0f;//radio del origen
 };

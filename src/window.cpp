@@ -5,7 +5,16 @@
 
 //Constructor del RRTWindow, llama al contructor base QWidget *parent
 //para inicializar con su posible padre (normalmente nullptr)
-RRTWindow::RRTWindow(QWidget *parent) : QMainWindow(parent) {
+RRTWindow::RRTWindow(QWidget *parent)
+    : RRTWindow("data/escenario1.in", "data/obstaculos1.in", parent)
+{
+}
+
+RRTWindow::RRTWindow(const std::string& scenarioPath,
+                     const std::string& obstaclesPath,
+                     QWidget *parent)
+    : QMainWindow(parent)
+{
     LOG_INFO("Construyendo ventana principal del visualizador RRT");
     setWindowTitle("RRT");//Titulo de la ventana
 
@@ -24,7 +33,7 @@ RRTWindow::RRTWindow(QWidget *parent) : QMainWindow(parent) {
     // posiciones de origen
     // posiciones de meta
     // parametros RTT
-    configureDemoScenario(w);
+    configureDemoScenario(w, scenarioPath, obstaclesPath);
 
     resize(500, 500);
     LOG_SUCCESS("Ventana principal inicializada: tamano=500x500");

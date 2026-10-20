@@ -4,6 +4,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QStringList>
 #include <exception>
 #include "Config.h"
 #include "logger.h"
@@ -85,7 +86,7 @@ void configureDemoScenario(
     widget->OriginTree(scene.xi, scene.yi, scene.thi, scene.numRobots, 5);
     widget->GoalTree(scene.xf, scene.yf, scene.thf, scene.numRobots, 5);
     widget->VelocitiesRobots(scene.Vxr, scene.Vyr, scene.Vangr, scene.numRobots);
-    widget->DistanceToTheGoal(scene.numRobots * 40);
+    widget->DistanceToTheGoal(40); // margen posicional por robot; el radio propio se suma en el planner y el dibujo.
 
     widget->ParamsTreeRRT(40,1000000);
     widget->DrawMyNodes(true,true);
@@ -118,26 +119,48 @@ void configureDemoScenario(
 //  localiza archivos intentando /..
 std::string encontrarPath(const std::string& path, int max_niveles)
 {
-    std::string intento = path;
+    QString requested = QString::fromStdString(path);
+    if (requested.isEmpty())
+        return {};
 
-    for (int i = 0; i < max_niveles; i++){
-        std::ifstream file(intento);
-        if ( file.is_open() ){
-
-            LOG_DEBUG("Archivo localizado: solicitado=", path,
-                      ", resuelto=", intento, ", nivel=", i);
-            return intento;
+    const QFileInfo requestedInfo(requested);
+    if (requestedInfo.isAbsolute()) {
+        if (requestedInfo.isFile())
+            return requestedInfo.absoluteFilePath().toStdString();
+        // Compatibilidad con las antiguas rutas "/data/..." relativas al proyecto.
+        if (requested.startsWith("/data/"))
+            requested = requested.mid(1);
+        else {
+            LOG_ERROR("No existe el archivo absoluto solicitado: ", path);
+            return {};
         }
+    }
 
-        LOG_TRACE("Ruta candidata no disponible: ", intento);
-        // subir
-        intento = "../" + intento;
+    QStringList bases;
+    bases << QDir::currentPath() << QCoreApplication::applicationDirPath();
+#ifdef RRT_PROJECT_DIR
+    bases << QString::fromUtf8(RRT_PROJECT_DIR);
+#endif
+
+    for (const QString& base : bases) {
+        QDir directory(base);
+        for (int level = 0; level <= max_niveles; ++level) {
+            const QFileInfo candidate(directory.filePath(requested));
+            if (candidate.isFile()) {
+                const QString resolved = candidate.absoluteFilePath();
+                LOG_INFO("Archivo localizado: solicitado=", path,
+                         ", resuelto=", resolved.toStdString(),
+                         ", base=", directory.absolutePath().toStdString());
+                return resolved.toStdString();
+            }
+            if (!directory.cdUp())
+                break;
+        }
     }
 
     LOG_ERROR("No se encontro el archivo ", path,
-              " tras revisar ", max_niveles, " niveles");
-
-    return "";
+              " desde el directorio de trabajo, el ejecutable ni el proyecto");
+    return {};
 }
 
 

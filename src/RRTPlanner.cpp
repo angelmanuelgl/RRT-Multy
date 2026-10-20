@@ -27,14 +27,23 @@ RRTPlanner::RRTPlanner()
 
 void RRTPlanner::setStart(const std::vector<Config>& q, float radius)
 {
-    collisionChecker_.setRobotRadius(radius); // AMGL //
-    collisionCheckResolution_ = radius / 2.0;
+    const float fallbackRadius = std::isfinite(radius) && radius >= 0.0f
+        ? radius : 5.0f;
+    collisionChecker_.setRobotRadius(fallbackRadius); // modelo uniforme actual
+    collisionCheckResolution_ = std::max(0.5, fallbackRadius / 2.0);
     originQ_ = q;
-    originRadius_ = radius;
+    for (auto& robot : originQ_) {
+        if (!std::isfinite(robot.radius) || robot.radius < 0.0f)
+            robot.radius = fallbackRadius;
+    }
+    if (goalQ_.size() == originQ_.size()) {
+        for (std::size_t i = 0; i < goalQ_.size(); ++i)
+            goalQ_[i].radius = originQ_[i].radius;
+    }
     numRobots_ = static_cast<int>(originQ_.size());
     reset();
     LOG_INFO("Origen RRT configurado: robots=", numRobots_,
-             ", radio=", radius,
+             ", radio_fallback=", fallbackRadius,
              ", resolucion_colision=", collisionCheckResolution_);
     for (std::size_t i = 0; i < originQ_.size(); ++i)
         LOG_DEBUG("Origen robot ", i, "=(", originQ_[i].x, ",",
@@ -43,11 +52,21 @@ void RRTPlanner::setStart(const std::vector<Config>& q, float radius)
 
 void RRTPlanner::setGoal(const std::vector<Config>& q, float radius)
 {
+    const float fallbackRadius = std::isfinite(radius) && radius >= 0.0f
+        ? radius : 5.0f;
     goalQ_ = q;
-    goalRadius_ = radius;
+    for (std::size_t i = 0; i < goalQ_.size(); ++i) {
+        if (i < originQ_.size()) {
+            // El radio pertenece al robot i y se conserva al cambiar su pose.
+            goalQ_[i].radius = originQ_[i].radius;
+        } else if (!std::isfinite(goalQ_[i].radius)
+                   || goalQ_[i].radius < 0.0f) {
+            goalQ_[i].radius = fallbackRadius;
+        }
+    }
     numRobots_ = static_cast<int>(goalQ_.size());
     reset(); // AMGL //
-    LOG_INFO("Meta RRT configurada: robots=", numRobots_, ", radio=", radius);
+    LOG_INFO("Meta RRT configurada: robots=", numRobots_);
     for (std::size_t i = 0; i < goalQ_.size(); ++i)
         LOG_DEBUG("Meta robot ", i, "=(", goalQ_[i].x, ",",
                   goalQ_[i].y, ",", goalQ_[i].theta, ")");
@@ -77,8 +96,17 @@ void RRTPlanner::setMaxNodes(int maxNodes)
 
 void RRTPlanner::setGoalTolerance(float distance)
 {
-    distToGoal_ = distance;
-    LOG_DEBUG("Tolerancia de llegada configurada: ", distToGoal_);
+    if (!std::isfinite(distance) || distance < 0.0f) {
+        LOG_WARN("Se ignoro un margen de llegada invalido: ", distance);
+        return;
+    }
+    goalMargin_ = distance;
+    LOG_DEBUG("Margen posicional de llegada configurado: ", goalMargin_);
+}
+
+float RRTPlanner::getGoalTolerance() const
+{
+    return goalMargin_;
 }
 
 void RRTPlanner::reset()
@@ -87,6 +115,8 @@ void RRTPlanner::reset()
     finalPath_.clear();
     nNodesPath_ = 0;
     nNodesRRT_ = 0;
+    attempts_ = 0;
+    problemChecked_ = false;
     done_ = false;
 
     if( !originQ_.empty() ){
@@ -210,7 +240,7 @@ bool RRTPlanner::step()
         // comprovacion para mas seguridad
         if( !std::isfinite(stepSize_)
             || stepSize_ <= 0.0f || stepSize_ > 500.0f
-            || !std::isfinite(distToGoal_) || distToGoal_ < 0.0f
+            || !std::isfinite(goalMargin_) || goalMargin_ < 0.0f
             || maxNodes_ < 2 ){
             return fallo("Parametros del RRT invalidos");
         }
@@ -224,7 +254,7 @@ bool RRTPlanner::step()
         problemChecked_ = true;
         LOG_INFO("Inicio de planificacion RRT: robots=", numRobots_,
                  ", paso=", stepSize_, ", max_nodos=", maxNodes_,
-                 ", tolerancia_meta=", distToGoal_);
+                 ", margen_meta_por_robot=", goalMargin_);
     }
 
     if( tree_.size() >= static_cast<std::size_t>(maxNodes_))
@@ -246,17 +276,28 @@ bool RRTPlanner::step()
     // }
 
 
-    //generamos un conf aleatoria de cada robot
+    // Contar también las muestras que después se rechazan por colisión.
+    ++attempts_;
+
+    // AMGL // direccion preferencial: con goalBias_ = 0.1, usar la configuracion final
+    // como muestra en el 10% de los intentos; el resto sigue siendo aleatorio.
+    const bool sampleGoal = randFloat(0.0f, 1.0f) < goalBias_;
     std::vector<Config> qRand(numRobots_);
-    for (int i = 0; i < numRobots_; ++i ){
-        qRand[i].x = randFloat(stepSize_, 500.0f); //width());
-        qRand[i].y = randFloat(stepSize_, 500.0f);// height());
-        //descomentar para contemlplar orientación
-        //qRand[i].theta = randFloat(-M_PI, M_PI); // por ahora de 0 a PI rad
-        if (i == 0)
-            LOG_TRACE("q_rand: robot0=(", qRand[i].x, ",", qRand[i].y,
-                      "), robots=", numRobots_);
+    if (sampleGoal) {
+        qRand = goalQ_; // AMGL // tomar la configuracion final conjunta como objetivo
+        LOG_TRACE("Muestra dirigida a la meta (intento ", attempts_, ")");
+    } else {
+        for (int i = 0; i < numRobots_; ++i) {
+            qRand[i].x = randFloat(stepSize_, 500.0f); //width());
+            qRand[i].y = randFloat(stepSize_, 500.0f);// height());
+            qRand[i].theta = 0.0f; // el criterio de llegada es solo posicional
+            qRand[i].radius = i < static_cast<int>(originQ_.size())
+                ? originQ_[i].radius : 5.0f;
+        }
     }
+    if (!qRand.empty())
+        LOG_TRACE("q_rand: robot0=(", qRand[0].x, ",", qRand[0].y,
+                  "), robots=", numRobots_);
 
     //encontramos el nodo mas cercano del arbol a qrand
     const int nearest = getNearest(qRand);
@@ -284,13 +325,11 @@ bool RRTPlanner::step()
     LOG_TRACE("Vertice agregado: indice=", newIndex,
               ", padre=", nearest, ", total=", tree_.size());
 
-    const float distanceToGoal = configDistance(qNew, goalQ_);
-    LOG_TRACE("Distancia de q_new a meta: ", distanceToGoal);
-    if( distanceToGoal > distToGoal_)
+    if (!isWithinGoalTolerance(qNew))
         return false;
 
-    LOG_DEBUG("Nodo dentro de tolerancia de meta: indice=", newIndex,
-              ", distancia=", distanceToGoal);
+    LOG_DEBUG("Todos los robots estan dentro de su region de llegada: indice=",
+              newIndex, ", margen_por_robot=", goalMargin_);
 
     if( tree_.size() >= static_cast<std::size_t>(maxNodes_))
         return false;
@@ -326,7 +365,7 @@ bool RRTPlanner::step()
      // AMGL// esto es lo que estaba anteriormente //ya no deberia ser util
     // if( !qNew.empty() ){
     //     const float distanceToGoal = configDistance(qNew, goalQ_);//Calculamos la distancia des qrand a la meta
-    //     if( distanceToGoal <= distToGoal_ ){
+    //     if( distanceToGoal <= goalMargin_ ){
     //         // Conectamos exactamente al goal del robot 0
     //         tree_.emplace_back(goalQ_, static_cast<int>(tree_.size()) - 1);//conectamos la meta con el ultimo nodo agregado
 
@@ -481,11 +520,37 @@ bool RRTPlanner::isConfigurationValid(
                   ", esperados=", numRobots_);
         return false;
     }
+    for (std::size_t i = 0; i < q.size(); ++i) {
+        if (!std::isfinite(q[i].x) || !std::isfinite(q[i].y)
+            || !std::isfinite(q[i].radius) || q[i].radius < 0.0f) {
+            LOG_ERROR("Pose o radio invalido para robot ", i,
+                      ": x=", q[i].x, ", y=", q[i].y,
+                      ", radio=", q[i].radius);
+            return false;
+        }
+    }
 
     const bool valid = !collisionChecker_.configurationInCollision(q);
     LOG_TRACE("Validacion de configuracion: robots=", q.size(),
               ", valida=", valid);
     return valid;
+}
+
+bool RRTPlanner::isWithinGoalTolerance(const std::vector<Config>& q) const
+{
+    if (q.size() != goalQ_.size())
+        return false;
+
+    for (std::size_t i = 0; i < q.size(); ++i) {
+        const float dx = q[i].x - goalQ_[i].x;
+        const float dy = q[i].y - goalQ_[i].y;
+        const float acceptedCenterDistance = goalMargin_ + goalQ_[i].radius;
+        if (!std::isfinite(dx) || !std::isfinite(dy)
+            || !std::isfinite(acceptedCenterDistance)
+            || std::hypot(dx, dy) > acceptedCenterDistance)
+            return false;
+    }
+    return true;
 }
 
 bool RRTPlanner::isEdgeValid(

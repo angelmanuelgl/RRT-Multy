@@ -22,7 +22,9 @@ public:
     // --- Parametros del algoritmo ---
     virtual void setStepSize(float step) = 0;
     virtual void setMaxNodes(int maxNodes) = 0;
+    // Margen posicional por robot; el radio físico se suma al evaluar y dibujar la meta.
     virtual void setGoalTolerance(float distance) = 0;
+    virtual float getGoalTolerance() const = 0;
 
     // --- Ciclo de vida de planificacion ---
     virtual void reset() = 0;
