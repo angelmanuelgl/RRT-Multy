@@ -22,13 +22,14 @@ void drawCircle(const Config& center, float radius, const Color& fill,
 void drawRobot(const Config& pose, const Color& color,
                bool showHeading = false);
 void drawTree(const std::vector<PlanNode>& tree, bool drawNodes,
-              float edgeAlpha = 0.48f, int highlightedRobot = -1);
+              float edgeAlpha = 0.48f, int highlightedRobot = -1,
+              int highlightedNode = -1);
 void drawPath(const std::vector<PlanNode>& tree,
               const std::vector<int>& path, bool drawPathNodes,
               int highlightedRobot = -1);
 void drawEulerSegment(const std::vector<Config>& previous,
                       const std::vector<Config>& next);
-void drawGoalRegions(const std::vector<Config>& goals, float radius);
+void drawGoalRegions(const std::vector<Config>& goals, float margin);
 void drawOriginRegions(const std::vector<Config>& origins, float radius);
 
 } // namespace auxDraw

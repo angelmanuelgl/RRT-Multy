@@ -12,8 +12,8 @@ int main(int argc, char *argv[]) {
 
     // Cambia estos dos nombres para probar otro par de archivos en data/.
     // Tambien puedes escribir rutas absolutas.
-    const std::string scenarioFile = "data/escenario3.in";
-    const std::string obstaclesFile = "data/obstaculos3.in";
+    const std::string scenarioFile = "data/escenario4.in";
+    const std::string obstaclesFile = "data/obstaculos4.in";
 
     LOG_INFO("El ejecutable se ejecuta desde:",
              QCoreApplication::applicationDirPath().toStdString());

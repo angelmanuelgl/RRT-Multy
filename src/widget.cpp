@@ -13,6 +13,8 @@
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QShortcut>
+#include <QKeySequence>
 #include <QVBoxLayout>
 #include <QWheelEvent>
 #include <QtMath>
@@ -112,6 +114,10 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
     }
 
 
+    // AMGL // radio fisico comun del widget y el planner.
+    const float robotRadius = std::isfinite(radio) && radio > 0.0f
+        ? radio : 5.0f;
+
     //Actualizar numero de robots
     std::vector<Config> origin(Nrobots);
 
@@ -120,14 +126,15 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
     //Tomando coordenadas de robots en la configuración origen
     for(int i=0;i<Nrobots; i++)
     {
-        origin[i]={x[i],y[i],th[i],radio};
+        origin[i]={x[i],y[i],th[i],robotRadius};
     }
 
-    originRadius_=radio; //radio del robot
+    originRadius_=robotRadius; //radio del robot
 
     velocityIntegrator_.setState(origin);
     planner_->setNumRobots(Nrobots);
-    planner_->setStart(origin, radio);
+    planner_->setStart(origin, robotRadius);
+    clearNodeHighlight();
 
     // AMGL // seleccionar resaltado: actualizar opciones para el escenario cargado.
     if (highlightRobotCombo_) {
@@ -154,7 +161,7 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
     timer_.start(timeGrowMs_); // mismo periodo que se usa ahora
     refreshOverlay(); // amgl // visual
     update();
-    LOG_INFO("Origen enviado al planner: robots=", Nrobots, ", radio=", radio);
+    LOG_INFO("Origen enviado al planner: robots=", Nrobots, ", radio=", robotRadius);
 }
 
 void RRTWidget::GoalTree(std::vector<float>& x, std::vector<float>& y,
@@ -176,20 +183,24 @@ void RRTWidget::GoalTree(std::vector<float>& x, std::vector<float>& y,
     }
 
 
+    // AMGL // mantener el mismo radio fisico que se usa en origen y colisiones.
+    const float robotRadius = std::isfinite(radio) && radio > 0.0f
+        ? radio : 5.0f;
     std::vector<Config> goal(Nrobots);
     for(int i=0;i<Nrobots; i++)
     {
-        goal[i]={x[i],y[i],th[i],radio};
+        goal[i]={x[i],y[i],th[i],robotRadius};
     }
     planner_->setNumRobots(Nrobots);
-    planner_->setGoal(goal, radio);
+    planner_->setGoal(goal, robotRadius);
+    clearNodeHighlight();
 
     // amgl // visual
     setVisualState(hasValidConfiguration()
         ? VisualState::Running
         : VisualState::InvalidConfiguration);
     refreshOverlay();
-    LOG_INFO("Meta enviada al planner: robots=", Nrobots, ", radio=", radio);
+    LOG_INFO("Meta enviada al planner: robots=", Nrobots, ", radio=", robotRadius);
 }
 
 void RRTWidget::computeVelocities(float Tau, int Nrobots)
@@ -457,6 +468,11 @@ void RRTWidget::createOverlayPanel()
     executionLayout->addWidget(pauseButton_);
     executionLayout->addWidget(stepButton_);
 
+    // AMGL // resaltar nodo: activar el ultimo nodo y mostrar el indice seleccionado.
+    highlightNodeButton_ = new QPushButton(QStringLiteral("Resaltar Nodo"),
+                                           executionPanel_);
+    executionLayout->addWidget(highlightNodeButton_);
+
     // AMGL // seleccionar resaltado: elegir robot desde la interfaz.
     highlightRobotCombo_ = new QComboBox(executionPanel_);
     highlightRobotCombo_->addItem(QStringLiteral("Todos"), -1);
@@ -478,6 +494,19 @@ void RRTWidget::createOverlayPanel()
 
     connect(pauseButton_, &QPushButton::clicked, this, &RRTWidget::togglePause);
     connect(stepButton_, &QPushButton::clicked, this, &RRTWidget::stepOnce);
+    connect(highlightNodeButton_, &QPushButton::clicked,
+            this, &RRTWidget::toggleNodeHighlight);
+
+    // AMGL // resaltar nodo: usar A y D dentro del widget sin interferir con flechas de camara.
+    auto *previousNodeShortcut = new QShortcut(QKeySequence(Qt::Key_A), this);
+    previousNodeShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(previousNodeShortcut, &QShortcut::activated,
+            this, [this]() { moveHighlightedNode(-1); });
+    auto *nextNodeShortcut = new QShortcut(QKeySequence(Qt::Key_D), this);
+    nextNodeShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(nextNodeShortcut, &QShortcut::activated,
+            this, [this]() { moveHighlightedNode(1); });
+
     connect(highlightRobotCombo_, qOverload<int>(&QComboBox::currentIndexChanged),
             this, [this](int index) {
                 // AMGL // seleccionar resaltado: actualizar el robot visible en primer plano.
@@ -761,12 +790,14 @@ void RRTWidget::paintGL()
 
     // aqui se dibuja todo
     if (!ActiveEuler) {
-        auxDraw::drawTree(tree, drawAllNodes_, 0.48f, highlightedRobot_);
+        auxDraw::drawTree(tree, drawAllNodes_, 0.48f, highlightedRobot_,
+                          highlightedNode_);
         auxDraw::drawPath(tree, planner_->getPath(), drawFinalPath_,
                           highlightedRobot_);
         auxDraw::drawOriginRegions(originQ, originRadius_);
     } else {
-        auxDraw::drawTree(tree, false, 0.45f, highlightedRobot_);
+        auxDraw::drawTree(tree, false, 0.45f, highlightedRobot_,
+                          highlightedNode_);
         auxDraw::drawEulerSegment(velocityIntegrator_.getPrevious(),
                                   velocityIntegrator_.getNext());
         auxDraw::drawOriginRegions(originQ, 2.0f);
@@ -951,6 +982,61 @@ void RRTWidget::growTree()
     executeSimulationTick(false);
 }
 
+// AMGL // resaltar nodo: activar/desactivar el resaltado del nodo actual.
+void RRTWidget::toggleNodeHighlight()
+{
+    if (highlightedNode_ >= 0) {
+        LOG_INFO("Resaltado de nodo desactivado: nodo=", highlightedNode_);
+        clearNodeHighlight();
+        update();
+        return;
+    }
+
+    const auto& tree = planner_->getTree();
+    if (tree.empty()) {
+        LOG_WARN("No se puede resaltar un nodo: el arbol RRT esta vacio");
+        return;
+    }
+
+    highlightedNode_ = static_cast<int>(tree.size()) - 1;
+    highlightNodeButton_->setText(
+        QStringLiteral("Un-select: %1").arg(highlightedNode_));
+    LOG_INFO("Nodo RRT resaltado: indice=", highlightedNode_);
+    update();
+}
+
+// AMGL // resaltar nodo: recorrer los indices sin modificar el planner.
+void RRTWidget::moveHighlightedNode(int delta)
+{
+    if (highlightedNode_ < 0)
+        return;
+
+    const auto& tree = planner_->getTree();
+    if (tree.empty()) {
+        clearNodeHighlight();
+        update();
+        return;
+    }
+
+    const int lastNode = static_cast<int>(tree.size()) - 1;
+    const int nextNode = std::clamp(highlightedNode_ + delta, 0, lastNode);
+    if (nextNode == highlightedNode_)
+        return;
+
+    highlightedNode_ = nextNode;
+    highlightNodeButton_->setText(
+        QStringLiteral("Un-select: %1").arg(highlightedNode_));
+    update();
+}
+
+// AMGL // resaltar nodo: limpiar el indice al desactivar o reiniciar el arbol.
+void RRTWidget::clearNodeHighlight()
+{
+    highlightedNode_ = -1;
+    if (highlightNodeButton_)
+        highlightNodeButton_->setText(QStringLiteral("Resaltar Nodo"));
+}
+
 // dsetiene la planificacion y pausa su analisis
 void RRTWidget::StopPlanning()
 {
@@ -974,6 +1060,7 @@ void RRTWidget::SetObstacles(const std::vector<PolygonObstacle>& obstacles)
 
     // primero configurar PQP // Si falla, no cambiar la imagen
     planner_->setObstacles(obstacles);
+    clearNodeHighlight();
     obstacles_ = obstacles;
 
     velocityIntegrator_.setState(planner_->getOrigin());

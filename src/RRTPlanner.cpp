@@ -27,15 +27,17 @@ RRTPlanner::RRTPlanner()
 
 void RRTPlanner::setStart(const std::vector<Config>& q, float radius)
 {
-    const float fallbackRadius = std::isfinite(radius) && radius >= 0.0f
+    const float fallbackRadius = std::isfinite(radius) && radius > 0.0f
         ? radius : 5.0f;
-    collisionChecker_.setRobotRadius(fallbackRadius); // modelo uniforme actual
-    collisionCheckResolution_ = std::max(0.5, fallbackRadius / 2.0);
     originQ_ = q;
+    float smallestRobotRadius = fallbackRadius;
     for (auto& robot : originQ_) {
-        if (!std::isfinite(robot.radius) || robot.radius < 0.0f)
+        if (!std::isfinite(robot.radius) || robot.radius <= 0.0f)
             robot.radius = fallbackRadius;
+        smallestRobotRadius = std::min(smallestRobotRadius, robot.radius);
+        collisionChecker_.setRobotRadius(robot.radius);
     }
+    collisionCheckResolution_ = std::max(0.1, smallestRobotRadius / 2.0);
     if (goalQ_.size() == originQ_.size()) {
         for (std::size_t i = 0; i < goalQ_.size(); ++i)
             goalQ_[i].radius = originQ_[i].radius;
@@ -52,7 +54,7 @@ void RRTPlanner::setStart(const std::vector<Config>& q, float radius)
 
 void RRTPlanner::setGoal(const std::vector<Config>& q, float radius)
 {
-    const float fallbackRadius = std::isfinite(radius) && radius >= 0.0f
+    const float fallbackRadius = std::isfinite(radius) && radius > 0.0f
         ? radius : 5.0f;
     goalQ_ = q;
     for (std::size_t i = 0; i < goalQ_.size(); ++i) {
@@ -60,7 +62,7 @@ void RRTPlanner::setGoal(const std::vector<Config>& q, float radius)
             // El radio pertenece al robot i y se conserva al cambiar su pose.
             goalQ_[i].radius = originQ_[i].radius;
         } else if (!std::isfinite(goalQ_[i].radius)
-                   || goalQ_[i].radius < 0.0f) {
+                   || goalQ_[i].radius <= 0.0f) {
             goalQ_[i].radius = fallbackRadius;
         }
     }
@@ -255,6 +257,15 @@ bool RRTPlanner::step()
         LOG_INFO("Inicio de planificacion RRT: robots=", numRobots_,
                  ", paso=", stepSize_, ", max_nodos=", maxNodes_,
                  ", margen_meta_por_robot=", goalMargin_);
+
+        // AMGL // criterio de llegada: el origen puede empezar dentro de la region aceptada.
+        if (isWithinGoalTolerance(originQ_)) {
+            finalPath_ = {0};
+            nNodesPath_ = 1;
+            done_ = true;
+            LOG_SUCCESS("Inicio ya dentro de las regiones de meta");
+            return true;
+        }
     }
 
     if( tree_.size() >= static_cast<std::size_t>(maxNodes_))
@@ -279,6 +290,7 @@ bool RRTPlanner::step()
     // Contar también las muestras que después se rechazan por colisión.
     ++attempts_;
 
+    // --- --- --- ---  q_rand <- RANDOM_STATE() --- --- --- ---
     // AMGL // direccion preferencial: con goalBias_ = 0.1, usar la configuracion final
     // como muestra en el 10% de los intentos; el resto sigue siendo aleatorio.
     const bool sampleGoal = randFloat(0.0f, 1.0f) < goalBias_;
@@ -299,6 +311,7 @@ bool RRTPlanner::step()
         LOG_TRACE("q_rand: robot0=(", qRand[0].x, ",", qRand[0].y,
                   "), robots=", numRobots_);
 
+    // EAR
     //encontramos el nodo mas cercano del arbol a qrand
     const int nearest = getNearest(qRand);
     const auto& qNear = tree_[nearest].q;
@@ -328,26 +341,13 @@ bool RRTPlanner::step()
     if (!isWithinGoalTolerance(qNew))
         return false;
 
-    LOG_DEBUG("Todos los robots estan dentro de su region de llegada: indice=",
-              newIndex, ", margen_por_robot=", goalMargin_);
+    LOG_DEBUG("Todos los robots dentro de sus regiones de llegada: indice=",
+              newIndex, ", radio_aceptacion_por_robot=radio_robot+", goalMargin_);
 
-    if( tree_.size() >= static_cast<std::size_t>(maxNodes_))
-        return false;
-
-
-    // comprobar la conexion final
-    if( !isEdgeValid(qNew, goalQ_) ) {
-        LOG_TRACE("Conexion final rechazada por colision: nodo=", newIndex);
-        return false;
-    }
-
-    // Conectamos exactamente al goal del robot 0
-    tree_.emplace_back(goalQ_, newIndex); //conectamos la meta con el ultimo nodo agregado
-
-    // Backtracking del camino
+    // AMGL // la region es la meta; no se exige una arista extra hasta los centros exactos.
     finalPath_.clear();
     nNodesPath_ = 0;
-    int index = static_cast<int>(tree_.size()) - 1;
+    int index = newIndex;
     while (index != -1 ){
         finalPath_.push_back(index);
         index = tree_[index].parent;
@@ -357,7 +357,7 @@ bool RRTPlanner::step()
 
     done_ = true;
     const auto stats = collisionChecker_.statistics();
-    LOG_SUCCESS("Ruta RRT encontrada: nodos_arbol=", tree_.size(),
+    LOG_SUCCESS("Ruta RRT encontrada dentro de las regiones de meta: nodos_arbol=", tree_.size(),
                 ", nodos_ruta=", finalPath_.size(),
                 ", consultas_colision=", stats.queries);
     return true;
@@ -522,7 +522,7 @@ bool RRTPlanner::isConfigurationValid(
     }
     for (std::size_t i = 0; i < q.size(); ++i) {
         if (!std::isfinite(q[i].x) || !std::isfinite(q[i].y)
-            || !std::isfinite(q[i].radius) || q[i].radius < 0.0f) {
+            || !std::isfinite(q[i].radius) || q[i].radius <= 0.0f) {
             LOG_ERROR("Pose o radio invalido para robot ", i,
                       ": x=", q[i].x, ", y=", q[i].y,
                       ", radio=", q[i].radius);
@@ -544,7 +544,7 @@ bool RRTPlanner::isWithinGoalTolerance(const std::vector<Config>& q) const
     for (std::size_t i = 0; i < q.size(); ++i) {
         const float dx = q[i].x - goalQ_[i].x;
         const float dy = q[i].y - goalQ_[i].y;
-        const float acceptedCenterDistance = goalMargin_ + goalQ_[i].radius;
+        const float acceptedCenterDistance = goalAcceptanceRadius(goalQ_[i], goalMargin_);
         if (!std::isfinite(dx) || !std::isfinite(dy)
             || !std::isfinite(acceptedCenterDistance)
             || std::hypot(dx, dy) > acceptedCenterDistance)

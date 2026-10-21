@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -19,7 +20,7 @@
 namespace {
 
 constexpr double pi = 3.14159265358979323846;
-constexpr int circleSegments = 32;
+constexpr int circleSegments = kRobotShapeSegments;
 
 // PARA DEBUG FACIL
 void checkPQP(int code, const char* operation)
@@ -124,9 +125,9 @@ std::unique_ptr<PQP_Model> makeObstacle(
 
 bool finiteConfig(const Config& q)
 {
-    return std::isfinite(q.x)
-    && std::isfinite(q.y)
-        && std::isfinite(q.theta);
+    return std::isfinite(q.x) && std::isfinite(q.y)
+        && std::isfinite(q.theta) && std::isfinite(q.radius)
+        && q.radius > 0.0f;
 }
 
 } // namespace
@@ -134,9 +135,20 @@ bool finiteConfig(const Config& q)
 
 
 struct PQPCollisionChecker::Impl {
-    std::unique_ptr<PQP_Model> robot = makeDisk(5.0);
+    std::map<double, std::unique_ptr<PQP_Model>> robotModels;
     std::vector<std::unique_ptr<PQP_Model>> obstacles;
     mutable Statistics stats;
+
+    PQP_Model* robotModel(double radius)
+    {
+        if (!std::isfinite(radius) || radius <= 0.0)
+            throw std::invalid_argument("Radio de robot invalido");
+        const auto found = robotModels.find(radius);
+        if (found != robotModels.end())
+            return found->second.get();
+        auto model = makeDisk(radius);
+        return robotModels.emplace(radius, std::move(model)).first->second.get();
+    }
 
     bool collides(PQP_Model* a, double ax, double ay,
                   PQP_Model* b, double bx, double by) const
@@ -195,9 +207,8 @@ void PQPCollisionChecker::setRobotRadius(double radius)
         throw std::invalid_argument("Radio invalido");
     }
 
-    auto replacement = makeDisk(radius);
-    impl_->robot = std::move(replacement);
-    LOG_SUCCESS("Radio del modelo de robot actualizado: ", radius);
+    (void)impl_->robotModel(radius);
+    LOG_SUCCESS("Modelo de colision disponible para radio: ", radius);
 }
 
 void PQPCollisionChecker::setObstacles(
@@ -227,19 +238,19 @@ bool PQPCollisionChecker::configurationInCollision(
         throw std::invalid_argument("Configuracion vacia");
     }
 
-    // colisiones robot - obstaculo
-    for( const auto& robot : q ){
-        if(  !finiteConfig(robot)) {
-            LOG_ERROR("Robot con estado no finito: (", robot.x, ",",
-                      robot.y, ",", robot.theta, ")");
-            throw std::invalid_argument("Configuracion no finita");
+    // colisiones robot - obstaculo usando el radio propio de cada Config.
+    for (const auto& robot : q) {
+        if (!finiteConfig(robot)) {
+            LOG_ERROR("Pose o radio invalido: (", robot.x, ",", robot.y,
+                      ",", robot.theta, "), radio=", robot.radius);
+            throw std::invalid_argument("Configuracion o radio no valido");
         }
 
-
-        for( const auto& obstacle : impl_->obstacles ){
-            if(  impl_->collides(
-                    impl_->robot.get(), robot.x, robot.y,
-                    obstacle.get(), 0.0, 0.0) ){
+        PQP_Model* robotModel = impl_->robotModel(robot.radius);
+        for (const auto& obstacle : impl_->obstacles) {
+            if (impl_->collides(
+                    robotModel, robot.x, robot.y,
+                    obstacle.get(), 0.0, 0.0)) {
                 LOG_TRACE("Colision robot-obstaculo: robot=(", robot.x,
                           ",", robot.y, ")");
                 return true;
@@ -251,9 +262,9 @@ bool PQPCollisionChecker::configurationInCollision(
     // para ver que robots no choquen tambien
     for( std::size_t i = 0; i < q.size();  i++){
         for( std::size_t j = i + 1; j < q.size(); ++j ){
-            if(  impl_->collides(
-                    impl_->robot.get(), q[i].x, q[i].y,
-                    impl_->robot.get(), q[j].x, q[j].y) ){
+            if (impl_->collides(
+                    impl_->robotModel(q[i].radius), q[i].x, q[i].y,
+                    impl_->robotModel(q[j].radius), q[j].x, q[j].y)) {
                 LOG_TRACE("Colision robot-robot: indices=", i, ",", j);
                 return true;
             }
@@ -284,9 +295,14 @@ bool PQPCollisionChecker::edgeInCollision(
     double maxDistance = 0.0;
 
     for( std::size_t i = 0; i < from.size();  i++){
-        if(  !finiteConfig(from[i]) || !finiteConfig(to[i])) {
-            LOG_ERROR("Extremo no finito en arista para robot ", i);
-            throw std::invalid_argument("Extremo de arista no finito");
+        if (!finiteConfig(from[i]) || !finiteConfig(to[i])) {
+            LOG_ERROR("Pose o radio no valido en arista para robot ", i);
+            throw std::invalid_argument("Extremo o radio de arista no valido");
+        }
+        if (std::abs(from[i].radius - to[i].radius) > 1e-6f) {
+            LOG_ERROR("El radio del robot cambia a lo largo de una arista: robot=", i,
+                      ", inicio=", from[i].radius, ", fin=", to[i].radius);
+            throw std::invalid_argument("El radio debe permanecer constante en la arista");
         }
 
         const double dx = double(to[i].x) - from[i].x;
@@ -320,6 +336,7 @@ bool PQPCollisionChecker::edgeInCollision(
 
             // La orientación no afecta al disco usado aquí.
             sample[i].theta = from[i].theta;
+            sample[i].radius = from[i].radius;
         }
 
         if(  configurationInCollision(sample)) {

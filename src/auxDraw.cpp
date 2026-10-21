@@ -8,7 +8,7 @@
 
 namespace auxDraw {
 namespace {
-constexpr int kMarkerSegments = 24;
+constexpr int kMarkerSegments = kRobotShapeSegments;
 constexpr float kPi = 3.14159265358979323846f;
 
 std::tuple<float, float, float> colorForRobot(int robot) {
@@ -95,23 +95,24 @@ void drawCircle(const Config& center, float radius, const Color& fill,
 // }
 void drawRobot(const Config& pose, const Color& color, bool showHeading) {
     const float radius = pose.radius;
-    // relleno
+    const float boundaryRadius = radius / std::cos(kPi / kMarkerSegments);
+    // AMGL // misma aproximacion circunscrita y segmentos que el modelo PQP.
     glColor4f(color.red, color.green, color.blue, color.alpha * 0.3f);
     glBegin(GL_TRIANGLE_FAN);
     glVertex2f(pose.x, pose.y);
     for (int i = 0; i <= kMarkerSegments; ++i) {
         const float angle = i * 2.0f * kPi / kMarkerSegments;
-        glVertex2f(pose.x + radius * std::cos(angle),
-                   pose.y + radius * std::sin(angle));
+        glVertex2f(pose.x + boundaryRadius * std::cos(angle),
+                   pose.y + boundaryRadius * std::sin(angle));
     }
     glEnd();
 
     // borde
     glColor4f(color.red, color.green, color.blue, color.alpha);
     glLineWidth(1.5f);
-    drawOutline(pose, radius, kMarkerSegments);
+    drawOutline(pose, boundaryRadius, kMarkerSegments);
 
-    // ciruclo ene l centor
+    // circulo interior
     drawOutline(pose, radius * 0.55f, kMarkerSegments);
 
     // centro
@@ -131,14 +132,15 @@ void drawRobot(const Config& pose, const Color& color, bool showHeading) {
 
 
 void drawTree(const std::vector<PlanNode>& tree, bool drawNodes,
-              float edgeAlpha, int highlightedRobot) {
+              float edgeAlpha, int highlightedRobot, int highlightedNode) {
     if (tree.empty())
         return;
     const int robotCount = static_cast<int>(tree.front().q.size());
-    // AMGL // seleccionar resaltado: dibujar primero los demás y dejar el elegido encima.
+    // AMGL // seleccionar resaltado: dibujar primero los demas y dejar el elegido encima.
     const bool validHighlight = highlightedRobot >= 0
         && highlightedRobot < robotCount;
-    for (int pass = 0; pass < robotCount; ++pass) {
+
+    for (int pass = 0; pass < robotCount; ++pass){
         const int robot = validHighlight
             ? (pass == robotCount - 1 ? highlightedRobot
                : (pass >= highlightedRobot ? pass + 1 : pass))
@@ -147,6 +149,7 @@ void drawTree(const std::vector<PlanNode>& tree, bool drawNodes,
         const bool highlighted = validHighlight && robot == highlightedRobot;
         const float alpha = highlighted ? 0.98f
             : (validHighlight ? edgeAlpha * 0.18f : edgeAlpha);
+
         glColor4f(red, green, blue, alpha);
         glLineWidth(highlighted ? 2.5f : 1.0f);
         glBegin(GL_LINES);
@@ -164,13 +167,45 @@ void drawTree(const std::vector<PlanNode>& tree, bool drawNodes,
         glEnd();
         if (drawNodes) {
             const float nodeAlpha = highlighted ? 0.95f
-                : (validHighlight ? 0.07f : 0.2f);
+                : (validHighlight ? 0.03f : 0.1f);
             for (const auto& node : tree) {
                 if (robot < static_cast<int>(node.q.size()))
                     drawRobot(node.q[robot], {red, green, blue, nodeAlpha});
             }
         }
     }
+
+    // AMGL // resaltar nodo: dibujar la rama padre-origen y marcar la configuracion elegida.
+    if (highlightedNode >= 0
+        && highlightedNode < static_cast<int>(tree.size())) {
+        std::vector<int> selectedBranch;
+        int index = highlightedNode;
+        for (std::size_t count = 0;
+             index >= 0 && index < static_cast<int>(tree.size())
+                 && count < tree.size();
+             ++count) {
+            selectedBranch.push_back(index);
+            const int parent = tree[index].parent;
+            if (parent < 0 || parent >= index)
+                break;
+            index = parent;
+        }
+        std::reverse(selectedBranch.begin(), selectedBranch.end());
+        drawPath(tree, selectedBranch, false, highlightedRobot);
+
+        const auto& selectedConfig = tree[highlightedNode].q;
+        for (std::size_t robot = 0; robot < selectedConfig.size(); ++robot) {
+            if (highlightedRobot >= 0
+                && static_cast<int>(robot) != highlightedRobot)
+                continue;
+            const Config& pose = selectedConfig[robot];
+            drawCircle(pose, std::max(4.0f, pose.radius * 1.8f),
+                       {1.0f, 0.72f, 0.05f, 0.10f},
+                       {1.0f, 0.62f, 0.02f, 1.0f});
+            drawRobot(pose, {1.0f, 0.72f, 0.05f, 1.0f});
+        }
+    }
+
     glLineWidth(1.0f);
 }
 
@@ -235,7 +270,7 @@ void drawEulerSegment(const std::vector<Config>& previous,
 void drawGoalRegions(const std::vector<Config>& goals, float margin) {
     for (std::size_t robot = 0; robot < goals.size(); ++robot) {
         const auto [red, green, blue] = colorForRobot(static_cast<int>(robot));
-        drawCircle(goals[robot], margin + goals[robot].radius,
+        drawCircle(goals[robot], goalAcceptanceRadius(goals[robot], margin),
                    {1.0f, 0.0f, 0.0f, 0.10f},
                    {red, green, blue, 0.95f});
     }
@@ -252,7 +287,7 @@ void drawOriginRegions(const std::vector<Config>& origins, float radius) {
         Config robotPose = origins[i];
         if (robotPose.radius <= 0.0f)
             robotPose.radius = radius;
-        // Circulo tenue alrededor de la huella física del robot.
+        // circulo  alrededor del robot
         drawCircle(robotPose, robotPose.radius * 2.0f,
                    {0.0f, 1.0f, 0.0f, 0.25f},
                    {0.0f, 0.45f, 0.0f, 0.5f}, kMarkerSegments);

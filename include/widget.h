@@ -131,6 +131,9 @@ private:
     void moverCamara(float dx, float dy);
     //  checar configuracion observable antes de ejecutar el planner
     bool hasValidConfiguration() const;
+    void toggleNodeHighlight(); // AMGL // resaltar nodo
+    void moveHighlightedNode(int delta); // AMGL // navegar con A y D
+    void clearNodeHighlight(); // AMGL // invalidar seleccion al reiniciar el arbol
 
     //AMGL// el estado del RTT es guardado aparte para separar  algoritmo de visualizacion
     std::shared_ptr<IPlanner> planner_; //RTT_planner // en general IPlaner
@@ -160,8 +163,10 @@ private:
     QLabel *zoomLabel_ = nullptr;
     QPushButton *pauseButton_ = nullptr;
     QPushButton *stepButton_ = nullptr;
+    QPushButton *highlightNodeButton_ = nullptr; // AMGL // resaltar nodo
     QComboBox *highlightRobotCombo_ = nullptr; // AMGL // seleccionar resaltado
     int highlightedRobot_ = -1; // -1 muestra todos los robots
+    int highlightedNode_ = -1; // AMGL // -1 indica que no hay nodo seleccionado
 
     // amgl // visual // infor uitl
     VisualState visualState_ = VisualState::Preparing;
