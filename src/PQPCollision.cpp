@@ -207,8 +207,10 @@ void PQPCollisionChecker::setRobotRadius(double radius)
         throw std::invalid_argument("Radio invalido");
     }
 
-    (void)impl_->robotModel(radius);
-    LOG_SUCCESS("Modelo de colision disponible para radio: ", radius);
+    (void)impl_->robotModel(radius + kCollisionSafetyMargin);
+    LOG_SUCCESS("Modelo de colision disponible: radio_fisico=", radius,
+                ", holgura=", kCollisionSafetyMargin,
+                ", radio_colision=", radius + kCollisionSafetyMargin);
 }
 
 void PQPCollisionChecker::setObstacles(
@@ -246,7 +248,8 @@ bool PQPCollisionChecker::configurationInCollision(
             throw std::invalid_argument("Configuracion o radio no valido");
         }
 
-        PQP_Model* robotModel = impl_->robotModel(robot.radius);
+        const double collisionRadius = robot.radius + kCollisionSafetyMargin;
+        PQP_Model* robotModel = impl_->robotModel(collisionRadius);
         for (const auto& obstacle : impl_->obstacles) {
             if (impl_->collides(
                     robotModel, robot.x, robot.y,
@@ -263,8 +266,10 @@ bool PQPCollisionChecker::configurationInCollision(
     for( std::size_t i = 0; i < q.size();  i++){
         for( std::size_t j = i + 1; j < q.size(); ++j ){
             if (impl_->collides(
-                    impl_->robotModel(q[i].radius), q[i].x, q[i].y,
-                    impl_->robotModel(q[j].radius), q[j].x, q[j].y)) {
+                    impl_->robotModel(q[i].radius + kCollisionSafetyMargin),
+                    q[i].x, q[i].y,
+                    impl_->robotModel(q[j].radius + kCollisionSafetyMargin),
+                    q[j].x, q[j].y)) {
                 LOG_TRACE("Colision robot-robot: indices=", i, ",", j);
                 return true;
             }

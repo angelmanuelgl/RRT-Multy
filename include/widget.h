@@ -5,6 +5,7 @@
 #include <QTimer>
 #include "IPlanner.h" //clase general // aqui esta el RTT
 #include "VelocityIntegrator.h"
+#include "animmov.h"
 #include "Obstacle.h"
 #include <memory>
 
@@ -22,6 +23,8 @@ class QWheelEvent;
 class RRTWidget : public QOpenGLWidget {
     Q_OBJECT
 public:
+    static constexpr int defaultGrowIntervalMs = 30;
+    static constexpr float eulerStepSeconds = 0.1f;
     RRTWidget(QWidget *parent = nullptr);//constructor, inicializa los graficos, el arbol y el temporizador
     void setPlanner(std::shared_ptr<IPlanner> planner);
     //QPointF ReadOriginTreePos() const {return QPointF(originX, originY, originTH);}
@@ -34,6 +37,13 @@ public:
 
     // amgl // visual // Detiene la planificacion y congela su analisis
     void StopPlanning();
+
+    void OriginTreeWithRadii(std::vector<float>& x, std::vector<float>& y,
+                             std::vector<float>& th, int Nrobots,
+                             const std::vector<float>& radios);
+    void GoalTreeWithRadii(std::vector<float>& x, std::vector<float>& y,
+                           std::vector<float>& th, int Nrobots,
+                           const std::vector<float>& radios);
 
     bool ActiveEuler=false;
 
@@ -97,6 +107,7 @@ private:
         Running,
         Paused,
         ManualStep,
+        AnimatingPath,
         GoalReached,
         NodeLimitReached,
         PlanningFailed,
@@ -141,6 +152,7 @@ private:
     // la idea es que este modulo podremos elegir que tipo es
     // avanzar en lineas rectas // metodo de euler // o
     VelocityIntegrator velocityIntegrator_;
+    AnimMov finalAnimation_;
 
     // obstaculos
     std::vector<PolygonObstacle> obstacles_;
@@ -172,18 +184,18 @@ private:
     VisualState visualState_ = VisualState::Preparing;
     int conceptualPhase_ = 0;
     quint64 executedSteps_ = 0;
-    int configuredMaxNodes_ = 0;
     bool paused_ = false;
     float zoomFactor_ = 1.0f;
-    float cameraCenterX_ = 250.0f;
-    float cameraCenterY_ = 250.0f;
+    float cameraCenterX_ = kWorldWidth * 0.5f;
+    float cameraCenterY_ = kWorldHeight * 0.5f;
     bool panning_ = false;
     QPoint lastPanPosition_;
     QElapsedTimer activeClock_;
+    QElapsedTimer animationClock_;
     qint64 accumulatedElapsedMs_ = 0;
 
     // param
 
-    int timeGrowMs_=30; //milisegundos
-    float originRadius_ = 5.0f;//radio del origen
+    int timeGrowMs_ = defaultGrowIntervalMs;
+    float originRadius_ = kDefaultRobotRadius;//radio del origen
 };

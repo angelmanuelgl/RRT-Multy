@@ -9,6 +9,8 @@
 #include "Config.h"
 #include "logger.h"
 
+#include <cmath>
+
 
 
 
@@ -83,23 +85,28 @@ void configureDemoScenario(
     }
 
 
-    widget->OriginTree(scene.xi, scene.yi, scene.thi, scene.numRobots, 5);
-    widget->GoalTree(scene.xf, scene.yf, scene.thf, scene.numRobots, 5);
+    widget->OriginTreeWithRadii(scene.xi, scene.yi, scene.thi,
+                                scene.numRobots, scene.radii);
+    widget->GoalTreeWithRadii(scene.xf, scene.yf, scene.thf,
+                              scene.numRobots, scene.radii);
     widget->VelocitiesRobots(scene.Vxr, scene.Vyr, scene.Vangr, scene.numRobots);
-    widget->DistanceToTheGoal(40); // margen posicional por robot; el radio propio se suma en el planner y el dibujo.
+    widget->DistanceToTheGoal(DemoScenarioDefaults::goalTolerance);
 
-    widget->ParamsTreeRRT(40,1000000);
+    widget->ParamsTreeRRT(DemoScenarioDefaults::maxExtensionStep,
+                          DemoScenarioDefaults::maxTreeNodes);
     widget->DrawMyNodes(true,true);
 
     LOG_INFO("Parametros iniciales: robots=", scene.numRobots,
              ", obstaculos=", obstacles.size(),
-             ", paso_RRT=40, max_nodos=1000000");
+             ", paso_RRT=", DemoScenarioDefaults::maxExtensionStep,
+             ", max_nodos=", DemoScenarioDefaults::maxTreeNodes,
+             ", margen_meta=", DemoScenarioDefaults::goalTolerance);
 
     //widget->EulerMult(0.1);
     if(widget->ActiveEuler)
-        widget->SetTimeGrow(2000);
+        widget->SetTimeGrow(DemoScenarioDefaults::eulerIntervalMs);
     else
-        widget->SetTimeGrow(10);
+        widget->SetTimeGrow(DemoScenarioDefaults::planningIntervalMs);
 
     LOG_SUCCESS("Simulacion RRT inicializada correctamente");
 }
@@ -187,19 +194,52 @@ bool loadScene(const std::string& ruta, SceneData& scene)
     scene.xi.resize(N); scene.yi.resize(N); scene.thi.resize(N);
     scene.xf.resize(N); scene.yf.resize(N); scene.thf.resize(N);
     scene.Vxr.resize(N); scene.Vyr.resize(N); scene.Vangr.resize(N);
+    scene.radii.resize(N, kDefaultRobotRadius);
 
-    // Leer los datos por cada robot
+    std::string line;
+    std::getline(file, line);
     for (int i = 0; i < N; ++i) {
-        if (!(file >> scene.xi[i] >> scene.yi[i] >> scene.thi[i]
-              >> scene.xf[i] >> scene.yf[i] >> scene.thf[i]
-              >> scene.Vxr[i] >> scene.Vyr[i] >> scene.Vangr[i])) {
+        std::vector<float> values;
+        while (std::getline(file, line)) {
+            const auto comment = line.find('#');
+            if (comment != std::string::npos)
+                line.erase(comment);
+            std::istringstream row(line);
+            float value = 0.0f;
+            while (row >> value)
+                values.push_back(value);
+            if (!row.eof()) {
+                LOG_FATAL("Valor invalido en la fila del robot ", i);
+                return false;
+            }
+            if (!values.empty())
+                break;
+        }
+
+        if (values.size() != 9 && values.size() != 10) {
             LOG_FATAL("Datos incompletos para el robot en el indice: ", i);
+            return false;
+        }
+        scene.xi[i] = values[0];
+        scene.yi[i] = values[1];
+        scene.thi[i] = values[2];
+        scene.xf[i] = values[3];
+        scene.yf[i] = values[4];
+        scene.thf[i] = values[5];
+        scene.Vxr[i] = values[6];
+        scene.Vyr[i] = values[7];
+        scene.Vangr[i] = values[8];
+        if (values.size() == 10)
+            scene.radii[i] = values[9];
+        if (!std::isfinite(scene.radii[i]) || scene.radii[i] <= 0.0f) {
+            LOG_FATAL("Radio invalido para el robot ", i, ": ", scene.radii[i]);
             return false;
         }
         LOG_DEBUG("Robot ", i,
                   ": inicio=(", scene.xi[i], ",", scene.yi[i], ",", scene.thi[i],
                   "), meta=(", scene.xf[i], ",", scene.yf[i], ",", scene.thf[i],
-                  "), velocidad=(", scene.Vxr[i], ",", scene.Vyr[i], ",", scene.Vangr[i], ")");
+                  "), velocidad=(", scene.Vxr[i], ",", scene.Vyr[i], ",", scene.Vangr[i],
+                  "), radio=", scene.radii[i]);
     }
 
     file.close();

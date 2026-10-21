@@ -84,10 +84,13 @@ El formato con el que se lee el input ess
 
 **`escenario.in`**
 * **Línea 1:** $N$ (número de robots).s
-* **Siguientes $N$ líneas:** `xi yi thi  xf yf thf  Vxr Vyr Vangr`
+* **Siguientes $N$ líneas:** `xi yi thi  xf yf thf  Vxr Vyr Vangr radio`
   * `xi, yi, thi`: Pose inicial $(x, y, \theta)$.
   * `xf, yf, thf`: Pose objetivo $(x, y, \theta)$.
   * `Vxr, Vyr, Vangr`: Límites de velocidad lineal y angular.
+  * `radio`: radio físico individual del robot. Si se omite en un escenario antiguo, se usa `5`.
+
+El radio físico se usa para dibujar cada robot y para calcular su región de llegada. Las colisiones usan ese radio más una holgura de seguridad de `1` unidad por robot; esta holgura no cambia el tamaño dibujado ni el margen de llegada.
 
 **`obstaculos.in`**
 * **Línea 1:** $M$ (cantidad de obstáculos).
@@ -100,7 +103,13 @@ El formato con el que se lee el input ess
 
 ## Elegir escenario y obstaculos
 
-El ejemplo 2 usa `data/escenario2.in` y `data/obstaculos2.in`; `src/main.cpp` apunta actualmente a esa pareja. Para cambiar de ejemplo, edita `scenarioFile` y `obstaclesFile` en `main()`. El ejemplo 1 sigue disponible como `data/escenario1.in` y `data/obstaculos1.in`.
+El ejemplo activo se selecciona mediante `scenarioFile` y `obstaclesFile` en `src/main.cpp`. Actualmente usa `data/escenario7.in` y `data/obstaculos7.in`.
+
+## Parámetros de planificación
+
+Los valores propios del algoritmo se agrupan en `RRTPlannerParameters`, declarado en `include/RRTPlanner.h`: paso, tolerancia de llegada, sesgo a la meta, límites de nodos e intentos, espacio de muestreo y resolución de colisiones. `RRTPlanner` conserva la configuración activa y expone los valores de paso y nodos a la interfaz.
+
+Los valores de la demostración que sustituyen esos defaults están en `DemoScenarioDefaults`, en `include/DemoScenario.h`. El intervalo del temporizador pertenece a `RRTWidget`; la holgura de colisión, el radio predeterminado y las dimensiones del mundo se comparten desde `include/Config.h`. Los radios individuales siguen viniendo de la última columna de cada fila de escenario.
 
 Las rutas relativas se buscan desde el directorio actual, el directorio del ejecutable y la carpeta del proyecto compilada en `qt_rrt.pro`.
 

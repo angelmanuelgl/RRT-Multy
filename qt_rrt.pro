@@ -49,6 +49,7 @@ SOURCES += \
     src/RRTPlanner.cpp \
     src/VelocityIntegrator.cpp \
     src/auxDraw.cpp \
+    src/animmov.cpp \
 
 
 
@@ -64,4 +65,5 @@ HEADERS += \
     include/Config.h \
     include/RRTPlanner.h \
     include/VelocityIntegrator.h \
-    include/auxDraw.h
+    include/auxDraw.h \
+    include/animmov.h

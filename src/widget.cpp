@@ -70,6 +70,7 @@ void RRTWidget::setPlanner(std::shared_ptr<IPlanner> planner)
     // AMGL // obstaculos
     planner->setObstacles(obstacles_);
     planner_ = std::move(planner);
+    finalAnimation_.clear();
     velocityIntegrator_.setState(planner_->getOrigin());
     LOG_SUCCESS("Planner instalado en RRTWidget: obstaculos=", obstacles_.size(),
                 ", robots=", planner_->getNumRobots());
@@ -97,6 +98,17 @@ void RRTWidget::initializeGL() {
 void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
                            std::vector<float>& th, int Nrobots, float radio)
 {
+    const float fallbackRadius = std::isfinite(radio) && radio > 0.0f
+        ? radio : kDefaultRobotRadius;
+    OriginTreeWithRadii(x, y, th, Nrobots,
+                        std::vector<float>(std::max(0, Nrobots), fallbackRadius));
+}
+
+void RRTWidget::OriginTreeWithRadii(std::vector<float>& x,
+                                    std::vector<float>& y,
+                                    std::vector<float>& th, int Nrobots,
+                                    const std::vector<float>& radios)
+{
     if (Nrobots <= 0)
     {
         LOG_ERROR("invalido ---  numero de robots=", Nrobots);
@@ -114,9 +126,12 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
     }
 
 
-    // AMGL // radio fisico comun del widget y el planner.
-    const float robotRadius = std::isfinite(radio) && radio > 0.0f
-        ? radio : 5.0f;
+    if (radios.size() < static_cast<std::size_t>(Nrobots)) {
+        LOG_ERROR("Radios de origen insuficientes: robots=", Nrobots,
+                  ", radios=", radios.size());
+        setVisualState(VisualState::InvalidConfiguration);
+        return;
+    }
 
     //Actualizar numero de robots
     std::vector<Config> origin(Nrobots);
@@ -126,14 +141,17 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
     //Tomando coordenadas de robots en la configuración origen
     for(int i=0;i<Nrobots; i++)
     {
-        origin[i]={x[i],y[i],th[i],robotRadius};
+        const float radius = std::isfinite(radios[i]) && radios[i] > 0.0f
+            ? radios[i] : kDefaultRobotRadius;
+        origin[i]={x[i],y[i],th[i],radius};
     }
 
-    originRadius_=robotRadius; //radio del robot
+    originRadius_ = origin.front().radius;
 
     velocityIntegrator_.setState(origin);
+    finalAnimation_.clear();
     planner_->setNumRobots(Nrobots);
-    planner_->setStart(origin, robotRadius);
+    planner_->setStart(origin, originRadius_);
     clearNodeHighlight();
 
     // AMGL // seleccionar resaltado: actualizar opciones para el escenario cargado.
@@ -161,11 +179,24 @@ void RRTWidget::OriginTree(std::vector<float>& x, std::vector<float>& y,
     timer_.start(timeGrowMs_); // mismo periodo que se usa ahora
     refreshOverlay(); // amgl // visual
     update();
-    LOG_INFO("Origen enviado al planner: robots=", Nrobots, ", radio=", robotRadius);
+    LOG_INFO("Origen enviado al planner: robots=", Nrobots);
+    for (int i = 0; i < Nrobots; ++i)
+        LOG_DEBUG("Radio fisico robot ", i, "=", origin[i].radius);
 }
 
 void RRTWidget::GoalTree(std::vector<float>& x, std::vector<float>& y,
                          std::vector<float>& th, int Nrobots, float radio)
+{
+    const float fallbackRadius = std::isfinite(radio) && radio > 0.0f
+        ? radio : kDefaultRobotRadius;
+    GoalTreeWithRadii(x, y, th, Nrobots,
+                      std::vector<float>(std::max(0, Nrobots), fallbackRadius));
+}
+
+void RRTWidget::GoalTreeWithRadii(std::vector<float>& x,
+                                  std::vector<float>& y,
+                                  std::vector<float>& th, int Nrobots,
+                                  const std::vector<float>& radios)
 {
     if (Nrobots <= 0) {
         LOG_ERROR("Meta invalida: numero de robots=", Nrobots);
@@ -183,16 +214,21 @@ void RRTWidget::GoalTree(std::vector<float>& x, std::vector<float>& y,
     }
 
 
-    // AMGL // mantener el mismo radio fisico que se usa en origen y colisiones.
-    const float robotRadius = std::isfinite(radio) && radio > 0.0f
-        ? radio : 5.0f;
+    if (radios.size() < static_cast<std::size_t>(Nrobots)) {
+        LOG_ERROR("Radios de meta insuficientes: robots=", Nrobots,
+                  ", radios=", radios.size());
+        setVisualState(VisualState::InvalidConfiguration);
+        return;
+    }
     std::vector<Config> goal(Nrobots);
     for(int i=0;i<Nrobots; i++)
     {
-        goal[i]={x[i],y[i],th[i],robotRadius};
+        const float radius = std::isfinite(radios[i]) && radios[i] > 0.0f
+            ? radios[i] : kDefaultRobotRadius;
+        goal[i]={x[i],y[i],th[i],radius};
     }
     planner_->setNumRobots(Nrobots);
-    planner_->setGoal(goal, robotRadius);
+    planner_->setGoal(goal, originRadius_);
     clearNodeHighlight();
 
     // amgl // visual
@@ -200,7 +236,7 @@ void RRTWidget::GoalTree(std::vector<float>& x, std::vector<float>& y,
         ? VisualState::Running
         : VisualState::InvalidConfiguration);
     refreshOverlay();
-    LOG_INFO("Meta enviada al planner: robots=", Nrobots, ", radio=", robotRadius);
+    LOG_INFO("Meta enviada al planner: robots=", Nrobots);
 }
 
 void RRTWidget::computeVelocities(float Tau, int Nrobots)
@@ -256,10 +292,10 @@ void RRTWidget::DistanceToTheGoal(float distance)//Definimos la distancia a la m
 void RRTWidget::ParamsTreeRRT(float Step, int MaximalNodes){//Definimos el tamaño de paso (step) y el numero maximo de nodos en el arbol
     planner_->setStepSize(Step);
     planner_->setMaxNodes(MaximalNodes);
-    configuredMaxNodes_ = MaximalNodes; // amgl // visual
     refreshOverlay(); // amgl // visual
-    LOG_INFO("Parametros RRT configurados desde widget: paso=", Step,
-             ", max_nodos=", MaximalNodes);
+    LOG_INFO("Parametros RRT configurados desde widget: paso=",
+             planner_->getStepSize(),
+             ", max_nodos=", planner_->getMaxNodes());
 }
 
 void RRTWidget::SetTimeGrow(int Tgrow){//Tiempo de crecimiento en cada iteracion del arbol
@@ -378,7 +414,7 @@ void RRTWidget::mouseMoveEvent(QMouseEvent *event)
     const QPoint pixelDelta = currentPosition - lastPanPosition_;
     lastPanPosition_ = currentPosition;
 
-    const float baseVisibleWorld = 500.0f / zoomFactor_;
+    const float baseVisibleWorld = kWorldWidth / zoomFactor_;
     const float aspect = static_cast<float>(width()) / static_cast<float>(height());
     const float visibleW = aspect > 1.0f
         ? baseVisibleWorld * aspect : baseVisibleWorld;
@@ -538,6 +574,7 @@ void RRTWidget::refreshOverlay()
     case VisualState::Running: stateText = QStringLiteral("Ejecutando"); break;
     case VisualState::Paused: stateText = QStringLiteral("Pausado"); break;
     case VisualState::ManualStep: stateText = QStringLiteral("Ejecutando paso manual"); break;
+    case VisualState::AnimatingPath: stateText = QStringLiteral("Animando ruta final"); break;
     case VisualState::GoalReached: stateText = QStringLiteral("Meta alcanzada"); break;
     case VisualState::NodeLimitReached: stateText = QStringLiteral("Límite de nodos alcanzado"); break;
     case VisualState::PlanningFailed: stateText = QStringLiteral("Búsqueda finalizada sin solución"); break;
@@ -557,8 +594,9 @@ void RRTWidget::refreshOverlay()
     stepsLabel_->setText(QStringLiteral("Pasos: %1").arg(executedSteps_));
 
     const int nodes = planner_ ? static_cast<int>(planner_->getTree().size()) : 0;
-    nodesLabel_->setText(configuredMaxNodes_ > 0
-        ? QStringLiteral("Nodos: %1 / %2").arg(nodes).arg(configuredMaxNodes_)
+    const int maxNodes = planner_ ? planner_->getMaxNodes() : 0;
+    nodesLabel_->setText(maxNodes > 0
+        ? QStringLiteral("Nodos: %1 / %2").arg(nodes).arg(maxNodes)
         : QStringLiteral("Nodos: %1").arg(nodes));
 
     const qint64 elapsed = tiempoEnMiliseg();
@@ -577,8 +615,11 @@ void RRTWidget::refreshOverlay()
         || visualState_ == VisualState::PlanningFailed
         || visualState_ == VisualState::InvalidConfiguration;
     const bool presentingManualStep = visualState_ == VisualState::ManualStep;
-    pauseButton_->setEnabled(!finished && !presentingManualStep);
-    stepButton_->setEnabled(!finished && !presentingManualStep);
+    const bool animationActive = finalAnimation_.isActive();
+    pauseButton_->setEnabled((!finished || animationActive)
+                             && !presentingManualStep);
+    stepButton_->setEnabled(!finished && !presentingManualStep
+                            && !animationActive);
 }
 
 // colocar el HUD sobre el area OpenGL
@@ -653,7 +694,7 @@ void RRTWidget::applyProjection(int w, int h)
         return;
 
     glViewport(0, 0, w, h);
-    const float baseWorld = 500.0f;
+    const float baseWorld = kWorldWidth;
     const float visibleWorld = baseWorld / zoomFactor_;
     const float aspect = static_cast<float>(w) / static_cast<float>(h);
     float visibleW = visibleWorld;
@@ -702,8 +743,8 @@ void RRTWidget::zoomOut()
 void RRTWidget::resetZoom()
 {
     // centrar tambine
-    cameraCenterX_ = 250.0f;
-    cameraCenterY_ = 250.0f;
+    cameraCenterX_ = kWorldWidth * 0.5f;
+    cameraCenterY_ = kWorldHeight * 0.5f;
     LOG_INFO("Camara restablecida al centro y zoom predeterminado");
     setZoomFactor(1.0f);
 }
@@ -789,21 +830,28 @@ void RRTWidget::paintGL()
     const auto& originQ = planner_->getOrigin();
 
     // aqui se dibuja todo
-    if (!ActiveEuler) {
+    auxDraw::drawGoalRegions(goalQ, planner_->getGoalTolerance());
+    if (finalAnimation_.hasPath()) {
+        auxDraw::drawTree(tree, drawAllNodes_, 0.48f, highlightedRobot_,
+                          highlightedNode_);
+        auxDraw::drawPath(tree, planner_->getPath(), drawFinalPath_,
+                          highlightedRobot_, 0.35f, 0.28f);
+        auxDraw::drawRobotState(finalAnimation_.state(), highlightedRobot_);
+    }
+    else if (!ActiveEuler) {
         auxDraw::drawTree(tree, drawAllNodes_, 0.48f, highlightedRobot_,
                           highlightedNode_);
         auxDraw::drawPath(tree, planner_->getPath(), drawFinalPath_,
                           highlightedRobot_);
         auxDraw::drawOriginRegions(originQ, originRadius_);
-    } else {
+    }
+    else {
         auxDraw::drawTree(tree, false, 0.45f, highlightedRobot_,
                           highlightedNode_);
         auxDraw::drawEulerSegment(velocityIntegrator_.getPrevious(),
                                   velocityIntegrator_.getNext());
         auxDraw::drawOriginRegions(originQ, 2.0f);
     }
-     auxDraw::drawGoalRegions(goalQ, planner_->getGoalTolerance());
-
     // amgl // llamar a las funciones ya implementadas
     statusPanel_->raise();
     telemetryPanel_->raise();
@@ -832,22 +880,28 @@ void RRTWidget::togglePause()
         || visualState_ == VisualState::NodeLimitReached
         || visualState_ == VisualState::PlanningFailed
         || visualState_ == VisualState::InvalidConfiguration;
-    if (finished)
+    if (finished && !finalAnimation_.isActive())
         return;
 
     paused_ = !paused_;
     if (paused_) {
         timer_.stop();
         phaseTimer_.stop();
+        animationClock_.invalidate();
         stopTiempo();
         setVisualState(VisualState::Paused);
         LOG_INFO("pausaaaa: pasos=", executedSteps_,
                  ", nodos=", planner_->getTree().size());
     } else {
         timer_.start(timeGrowMs_);
-        phaseTimer_.start();
-        startTiempo();
-        setVisualState(VisualState::Running);
+        if (finalAnimation_.isActive()) {
+            animationClock_.start();
+            setVisualState(VisualState::AnimatingPath);
+        } else {
+            phaseTimer_.start();
+            startTiempo();
+            setVisualState(VisualState::Running);
+        }
         LOG_INFO("reanudadoo: periodo_ms=", timeGrowMs_);
     }
     update();
@@ -860,7 +914,7 @@ void RRTWidget::stepOnce()
         || visualState_ == VisualState::NodeLimitReached
         || visualState_ == VisualState::PlanningFailed
         || visualState_ == VisualState::InvalidConfiguration;
-    if (finished)
+    if (finished || finalAnimation_.isActive())
         return;
 
     paused_ = true;
@@ -887,14 +941,15 @@ bool RRTWidget::executePlannerIteration()
         return false;
     }
 
-    if (configuredMaxNodes_ > 0
-        && static_cast<int>(planner_->getTree().size()) >= configuredMaxNodes_) {
+    const int maxNodes = planner_->getMaxNodes();
+    if (maxNodes > 0
+        && static_cast<int>(planner_->getTree().size()) >= maxNodes) {
         timer_.stop();
         phaseTimer_.stop();
         stopTiempo();
         setVisualState(VisualState::NodeLimitReached);
         LOG_ERROR("LIMITE DE NODOS ALCANZADO        nodos=",
-                  planner_->getTree().size(), ", limite=", configuredMaxNodes_);
+                  planner_->getTree().size(), ", limite=", maxNodes);
         return false;
     }
 
@@ -914,10 +969,22 @@ bool RRTWidget::executePlannerIteration()
     if (reachedGoal) {
         timer_.stop();
         phaseTimer_.stop();
+        animationClock_.invalidate();
         stopTiempo();
-        setVisualState(VisualState::GoalReached);
         LOG_SUCCESS("meta alcanzada   pasos=", executedSteps_,
                     ", nodos=", planner_->getTree().size());
+        if (finalAnimation_.setPath(planner_->getTree(), planner_->getPath())
+            && finalAnimation_.start()) {
+            if (paused_) {
+                setVisualState(VisualState::Paused);
+            } else {
+                animationClock_.start();
+                timer_.start(timeGrowMs_);
+                setVisualState(VisualState::AnimatingPath);
+            }
+        } else {
+            setVisualState(VisualState::GoalReached);
+        }
         return true;
     }
 
@@ -926,8 +993,9 @@ bool RRTWidget::executePlannerIteration()
         timer_.stop();
         phaseTimer_.stop();
         stopTiempo();
-        const bool hitNodeLimit = configuredMaxNodes_ > 0
-            && static_cast<int>(planner_->getTree().size()) >= configuredMaxNodes_;
+        const int maxNodes = planner_->getMaxNodes();
+        const bool hitNodeLimit = maxNodes > 0
+            && static_cast<int>(planner_->getTree().size()) >= maxNodes;
         setVisualState(hitNodeLimit
             ? VisualState::NodeLimitReached
             : VisualState::PlanningFailed);
@@ -944,6 +1012,28 @@ bool RRTWidget::executePlannerIteration()
 // ciclo de simulacion compartido por timer y paso manual
 void RRTWidget::executeSimulationTick(bool manualStep)
 {
+    if (finalAnimation_.isActive()) {
+        if (manualStep) {
+            finalAnimation_.advance(timeGrowMs_ / 1000.0f);
+        } else {
+            const float deltaTime = animationClock_.isValid()
+                ? animationClock_.restart() / 1000.0f
+                : timeGrowMs_ / 1000.0f;
+            finalAnimation_.advance(deltaTime);
+        }
+        if (finalAnimation_.isFinished()) {
+            timer_.stop();
+            animationClock_.invalidate();
+            paused_ = true;
+            setVisualState(VisualState::GoalReached);
+            LOG_SUCCESS("Animacion finalizada: tramos_completados");
+        } else if (!paused_) {
+            setVisualState(VisualState::AnimatingPath);
+        }
+        update();
+        return;
+    }
+
     setVisualState(manualStep ? VisualState::ManualStep : VisualState::Running);
 
     if (!ActiveEuler) {
@@ -955,6 +1045,10 @@ void RRTWidget::executeSimulationTick(bool manualStep)
     if (velocityIntegrator_.needsSegment()) {
         const std::size_t previousTreeSize = planner_->getTree().size();
         const bool reachedGoal = executePlannerIteration();
+        if (reachedGoal) {
+            update();
+            return;
+        }
         const auto &tree = planner_->getTree();
 
         if (!reachedGoal && tree.size() > previousTreeSize) {
@@ -968,7 +1062,7 @@ void RRTWidget::executeSimulationTick(bool manualStep)
         }
     }
 
-    EulerMult(0.1f);
+    EulerMult(eulerStepSeconds);
     update();
 }
 
@@ -1042,6 +1136,8 @@ void RRTWidget::StopPlanning()
 {
     timer_.stop();
     phaseTimer_.stop();
+    animationClock_.invalidate();
+    finalAnimation_.clear();
     stopTiempo();
     paused_ = true;
     setVisualState(VisualState::Paused);
@@ -1060,6 +1156,8 @@ void RRTWidget::SetObstacles(const std::vector<PolygonObstacle>& obstacles)
 
     // primero configurar PQP // Si falla, no cambiar la imagen
     planner_->setObstacles(obstacles);
+    animationClock_.invalidate();
+    finalAnimation_.clear();
     clearNodeHighlight();
     obstacles_ = obstacles;
 

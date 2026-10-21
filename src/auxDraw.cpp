@@ -35,11 +35,11 @@ void drawGrid() {
     glColor4f(0.45f, 0.52f, 0.62f, 0.16f);
     glLineWidth(1.0f);
     glBegin(GL_LINES);
-    for (int coord = 0; coord <= 500; coord += 50) {
+    for (int coord = 0; coord <= kWorldWidth; coord += kWorldGridSpacing) {
         glVertex2f(static_cast<float>(coord), 0.0f);
-        glVertex2f(static_cast<float>(coord), 500.0f);
+        glVertex2f(static_cast<float>(coord), kWorldHeight);
         glVertex2f(0.0f, static_cast<float>(coord));
-        glVertex2f(500.0f, static_cast<float>(coord));
+        glVertex2f(kWorldWidth, static_cast<float>(coord));
     }
     glEnd();
 }
@@ -129,6 +129,17 @@ void drawRobot(const Config& pose, const Color& color, bool showHeading) {
     glLineWidth(1.0f); // Restaurar grosor por defecto
 }
 
+void drawRobotState(const std::vector<Config>& state, int highlightedRobot) {
+    const bool validHighlight = highlightedRobot >= 0
+        && highlightedRobot < static_cast<int>(state.size());
+    for (std::size_t robot = 0; robot < state.size(); ++robot) {
+        const auto [red, green, blue] = colorForRobot(static_cast<int>(robot));
+        const float alpha = validHighlight && static_cast<int>(robot) != highlightedRobot
+            ? 0.18f : 1.0f;
+        drawRobot(state[robot], {red, green, blue, alpha}, true);
+    }
+}
+
 
 
 void drawTree(const std::vector<PlanNode>& tree, bool drawNodes,
@@ -211,14 +222,14 @@ void drawTree(const std::vector<PlanNode>& tree, bool drawNodes,
 
 void drawPath(const std::vector<PlanNode>& tree,
               const std::vector<int>& path, bool drawPathNodes,
-              int highlightedRobot) {
+              int highlightedRobot, float pathAlpha, float nodeAlpha) {
     if (path.empty())
         return;
     const int first = path.front();
     if (first < 0 || first >= static_cast<int>(tree.size()))
         return;
     const int robotCount = static_cast<int>(tree[first].q.size());
-    // AMGL // seleccionar resaltado: atenuar las rutas restantes y dibujar al elegido al final.
+    // AMGL // seleccionar resaltado: atenuar las rutas restantes y dibujar al elegido al final
     const bool validHighlight = highlightedRobot >= 0
         && highlightedRobot < robotCount;
     for (int pass = 0; pass < robotCount; ++pass) {
@@ -229,7 +240,7 @@ void drawPath(const std::vector<PlanNode>& tree,
         const auto [red, green, blue] = colorForRobot(robot);
         const bool highlighted = validHighlight && robot == highlightedRobot;
         glColor4f(red, green, blue,
-                  highlighted ? 1.0f : (validHighlight ? 0.16f : 0.95f));
+                  highlighted ? pathAlpha : (validHighlight ? 0.16f : pathAlpha));
         glLineWidth(highlighted ? 7.0f : (validHighlight ? 3.0f : 5.0f));
         glBegin(GL_LINE_STRIP);
         for (int index : path) {
@@ -239,8 +250,8 @@ void drawPath(const std::vector<PlanNode>& tree,
         }
         glEnd();
         if (drawPathNodes) {
-            const float alpha = highlighted ? 1.0f
-                : (validHighlight ? 0.18f : 0.95f);
+            const float alpha = highlighted ? nodeAlpha
+                : (validHighlight ? 0.18f : nodeAlpha);
             for (int index : path) {
                 if (index >= 0 && index < static_cast<int>(tree.size())
                     && robot < static_cast<int>(tree[index].q.size()))

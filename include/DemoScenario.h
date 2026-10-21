@@ -11,6 +11,14 @@
 #include <fstream>
 #include <utility>
 
+namespace DemoScenarioDefaults {
+inline constexpr float goalTolerance = 30.0f;
+inline constexpr float maxExtensionStep = 40.0f;
+inline constexpr int maxTreeNodes = 1000000;
+inline constexpr int planningIntervalMs = 10;
+inline constexpr int eulerIntervalMs = 2000;
+}
+
 class RRTWidget;
 
 struct SceneData {
@@ -18,6 +26,7 @@ struct SceneData {
     std::vector<float> xi, yi, thi;
     std::vector<float> xf, yf, thf;
     std::vector<float> Vxr, Vyr, Vangr;
+    std::vector<float> radii;
 };
 
 std::string encontrarPath(const std::string& path, int max_niveles = 20);

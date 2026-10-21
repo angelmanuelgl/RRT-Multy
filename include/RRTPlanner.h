@@ -6,9 +6,22 @@
 #include <cstdint>
 #include <vector>
 
+struct RRTPlannerParameters {
+    float stepSize = 8.0f;
+    float goalTolerance = 50.0f;
+    float goalBias = 0.1f;
+    int maxNodes = 2000;
+    std::uint64_t maxAttempts = 200000;
+    float maxStepSize = kWorldWidth;
+    float workspaceWidth = kWorldWidth;
+    float workspaceHeight = kWorldHeight;
+    double minimumCollisionResolution = 0.1;
+    double collisionResolutionRadiusFactor = 0.5;
+};
+
 class RRTPlanner : public IPlanner {
 public:
-    RRTPlanner();
+    explicit RRTPlanner(const RRTPlannerParameters& parameters = {});
 
     void setStart(const std::vector<Config>& q, float radius) override;
     void setGoal(const std::vector<Config>& q, float radius) override;
@@ -18,7 +31,9 @@ public:
     PQPCollisionChecker::Statistics getCollisionStatistics() const;
 
     void setStepSize(float step) override;
+    float getStepSize() const override;
     void setMaxNodes(int maxNodes) override;
+    int getMaxNodes() const override;
     void setGoalTolerance(float distance) override;
     float getGoalTolerance() const override;
 
@@ -46,13 +61,14 @@ private:
     // colissiones
     PQPCollisionChecker collisionChecker_;
 
-    double collisionCheckResolution_ = 2.5;
+    RRTPlannerParameters parameters_;
+    double collisionCheckResolution_ =
+        (Config{}.radius + kCollisionSafetyMargin)
+        * RRTPlannerParameters{}.collisionResolutionRadiusFactor;
     bool problemChecked_ = false;
 
     // limite de intentos de muestras
     std::uint64_t attempts_ = 0;
-    std::uint64_t maxAttempts_ = 200000;
-    float goalBias_ = 0.1f; // AMGL // direccion preferencial a la meta: 10% de los intentos
 
     bool isConfigurationValid(const std::vector<Config>& q) const;
     bool isEdgeValid(const std::vector<Config>& from,
@@ -65,11 +81,6 @@ private:
     std::vector<Config> goalQ_;//meta a llegar
     std::vector<Config> originQ_; //origen
 
-    float stepSize_ = 8.0f;//15.0f tamaño de paso
-    float goalMargin_ = 50.0f;
-    float diamRobot_ = 5.0f;
-
-    int maxNodes_ = 2000;//maximo de nodos para detener la expansión del arbol
     int numRobots_ = 1;
     int nNodesPath_ = 0; //numero de nodos en el final path
     int nNodesRRT_ = 0;
