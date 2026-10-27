@@ -7,6 +7,12 @@ Aplicación en C++17 y Qt 6 para visualizar un árbol RRT para múltiples robots
 * verificador de colisiones basado en [PQP - A Proximity Query Package](https://gamma.cs.unc.edu/SSV/)
 
 
+| Escenario / Prueba | Vista previa (Haz clic para ver) | Descripción técnica |
+| :--- | :---: | :--- |
+| **Obstáculos Poligonales** | [![Demo 1](https://img.youtube.com/vi/MbGwMqPPoII/hqdefault.jpg)](https://youtu.be/MbGwMqPPoII) | Exploración del árbol RRT en $2N$ dimensiones sorteando obstáculos triangulares con PQP. |
+| **Laberinto y Obstáculos en T** | [![Demo 2](https://img.youtube.com/vi/DWPUuyWW6oc/hqdefault.jpg)](https://youtu.be/DWPUuyWW6oc) | Evaluación del rendimiento del RRT conjunto en un entorno complejo y confinado. |
+
+
 ### RESUMEN principal
 
 * **`main.cpp`**: crea `QApplication` y la ventana principal `RRTWindow`.
@@ -211,4 +217,4 @@ lo entrega a `VelocityIntegrator` y después coordina sus avances desde el tempo
 - Se crearon `VelocityIntegrator.h` y `VelocityIntegrator.cpp` sin dependencias de Qt
 - Se trasladaron las velocidades y las configuraciones `Next`, `Curr` y `Prev` al integrador
 - `computeVelocities()`, `VelocitiesRobots()` y `EulerMult()` actúan ahora como fachadas delgadas hacia `VelocityIntegrator`
-x
+

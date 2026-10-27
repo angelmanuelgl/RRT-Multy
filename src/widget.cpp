@@ -832,10 +832,10 @@ void RRTWidget::paintGL()
     // aqui se dibuja todo
     auxDraw::drawGoalRegions(goalQ, planner_->getGoalTolerance());
     if (finalAnimation_.hasPath()) {
-        auxDraw::drawTree(tree, drawAllNodes_, 0.48f, highlightedRobot_,
+        auxDraw::drawTree(tree, drawAllNodes_, 0.10f, highlightedRobot_,
                           highlightedNode_);
         auxDraw::drawPath(tree, planner_->getPath(), drawFinalPath_,
-                          highlightedRobot_, 0.35f, 0.28f);
+                          highlightedRobot_, 0.20f, 0.50f);
         auxDraw::drawRobotState(finalAnimation_.state(), highlightedRobot_);
     }
     else if (!ActiveEuler) {

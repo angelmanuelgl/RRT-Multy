@@ -18,6 +18,9 @@ Makefile
 third_party/PQP/*.o
 third_party/PQP/lib/
 
+# Media files
+*.mp4
+*.mov 
 
 # Object and binary files
 *.o
