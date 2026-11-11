@@ -19,7 +19,9 @@ SOURCES += \
     $$PQP_ROOT/Build.cpp \
     $$PQP_ROOT/BV.cpp \
     $$PQP_ROOT/PQP.cpp \
-    $$PQP_ROOT/TriDist.cpp
+    $$PQP_ROOT/TriDist.cpp \
+    src/VO.cpp \
+    src/pruebas_rapido.cpp
 
 DISTFILES += \
     README.md \
@@ -35,7 +37,8 @@ DISTFILES += \
     data/escenario6.in \
     data/obstaculos6.in \
     data/escenario7.in \
-    data/obstaculos7.in
+    data/obstaculos7.in \
+    data/dataprueba/poligonos.in
 
 
 INCLUDEPATH += include
@@ -66,4 +69,6 @@ HEADERS += \
     include/RRTPlanner.h \
     include/VelocityIntegrator.h \
     include/auxDraw.h \
-    include/animmov.h
+    include/animmov.h \
+    include/VO.h \
+    include/pruebas_rapido.h

@@ -1,3 +1,8 @@
+#include "pruebas_rapido.h"
+
+#include <QApplication>
+
+
 #include "window.h"
 #include "logger.h"
 
@@ -7,13 +12,14 @@
 
 #include <string>
 
+/**/
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
 
     // Cambia estos dos nombres para probar otro par de archivos en data/.
     // Tambien puedes escribir rutas absolutas.
-    const std::string scenarioFile = "data/escenario7.in";
-    const std::string obstaclesFile = "data/obstaculos7.in";
+    const std::string scenarioFile = "data/escenario1.in";
+    const std::string obstaclesFile = "data/obstaculos1.in";
 
     LOG_INFO("El ejecutable se ejecuta desde:",
              QCoreApplication::applicationDirPath().toStdString());
@@ -25,4 +31,18 @@ int main(int argc, char *argv[]) {
     window.show();
     LOG_SUCCESS("Aplicacion RRT lista; iniciando ciclo de eventos");
     return app.exec();
+
+
 }
+
+/*
+int main(int argc, char *argv[]) {
+    QApplication app(argc, argv);
+
+    PruebasRapido widget;
+    widget.resize(800, 800);
+    widget.show();
+
+    return app.exec();
+}*/
+

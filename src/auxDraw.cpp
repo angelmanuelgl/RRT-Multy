@@ -8,6 +8,7 @@
 
 namespace auxDraw {
 namespace {
+
 constexpr int kMarkerSegments = kRobotShapeSegments;
 constexpr float kPi = 3.14159265358979323846f;
 
@@ -29,6 +30,22 @@ void drawOutline(const Config& center, float radius, int segments) {
     }
     glEnd();
 }
+
+void drawObstacle(const PolygonObstacle& obstacle) {
+    glColor4f(0.48f, 0.52f, 0.58f, 0.58f);
+    glBegin(GL_TRIANGLES);
+    for (const auto& triangle : obstacle.triangles)
+        for (const auto& point : triangle)
+            glVertex2d(point.x, point.y);
+    glEnd();
+
+    glColor4f(0.16f, 0.19f, 0.24f, 0.90f);
+    glLineWidth(2.0f);
+    glBegin(GL_LINE_LOOP);
+    for (const auto& point : obstacle.vertices)
+        glVertex2d(point.x, point.y);
+    glEnd();
+}
 } // namespace
 
 void drawGrid() {
@@ -45,22 +62,8 @@ void drawGrid() {
 }
 
 void drawObstacles(const std::vector<PolygonObstacle>& obstacles) {
-    glColor4f(0.48f, 0.52f, 0.58f, 0.58f);
-    glBegin(GL_TRIANGLES);
     for (const auto& obstacle : obstacles)
-        for (const auto& triangle : obstacle.triangles)
-            for (const auto& point : triangle)
-                glVertex2d(point.x, point.y);
-    glEnd();
-
-    glColor4f(0.16f, 0.19f, 0.24f, 0.90f);
-    glLineWidth(2.0f);
-    for (const auto& obstacle : obstacles) {
-        glBegin(GL_LINE_LOOP);
-        for (const auto& point : obstacle.vertices)
-            glVertex2d(point.x, point.y);
-        glEnd();
-    }
+        drawObstacle(obstacle);
     glLineWidth(1.0f);
 }
 
@@ -93,6 +96,7 @@ void drawCircle(const Config& center, float radius, const Color& fill,
 //         glEnd();
 //     }
 // }
+
 void drawRobot(const Config& pose, const Color& color, bool showHeading) {
     const float radius = pose.radius;
     const float boundaryRadius = radius / std::cos(kPi / kMarkerSegments);
